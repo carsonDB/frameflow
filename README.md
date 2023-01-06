@@ -1,5 +1,5 @@
 # FrameFlow.js
-An easy and flexible audio/video streaming processing tool, based on WebAssembly and FFmpeg.
+An easy and flexible audio/video streaming processing library for JavaScript world, based on WebAssembly and FFmpeg.
 
 ## Simple demo
 Demos are in the `./examples/...`
@@ -15,13 +15,14 @@ await source.trim(1, 10).exportTo('./out.webm')
 ### Browser/Nodejs
 ```JavaScript
 import fflow from 'frameflow'
-let source = await fflow.source(blobIn)
+// use web File api to get File handler.
+let source = await fflow.source(fileBlob)
 let stream = await source.trim(1, 10).export()
-stream.forEach(blob => {/* do something */})
+stream.forEach(chunk => {/* do something */})
 ```
 
 ## Complex demo
-Multiple sources in, and multiple outputs. Inputs and outputs can be streaming frames.
+Multiple sources in, and multiple outputs. Inputs and outputs can be streaming images.
 
 ```JavaScript
 let video1 = await fflow.source('./test.avi') // node.js
@@ -37,9 +38,9 @@ let output = fflow.concat([video1, video2])
 // output all at once
 await output.exportTo('./out.webm')
 // output frame by frame
-let stream = await output.export('frame')
+let stream = await output.export({image: 'bmp'})
 setInterval(() => {
-    let blob = await stream.next()
+    let image = await stream.next()
 }, 1000/30) // render at 30 fps.
 
 ```
