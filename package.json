@@ -1,0 +1,21 @@
+{
+  "name": "ffmpeg-wasm",
+  "version": "0.1.0",
+  "description": "typescript wrapper of c ffmpeg",
+  "main": "src/ts/main.ts",
+  "directories": {
+    "example": "examples"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "gen_cpp_params": "ts-node src/tools/cpp_params_gen.ts"
+  },
+  "author": "carsonDB",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "ts-node": "^10.8.1",
+    "typescript": "^4.7.4",
+    "yaml": "^2.1.1"
+  }
+}
