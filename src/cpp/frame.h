@@ -7,7 +7,6 @@ extern "C" {
     #include <libavutil/imgutils.h>
 }
 
-#include "generated/params.h"
 using namespace emscripten;
 
 
@@ -15,11 +14,11 @@ class Frame {
     AVFrame* av_frame;
     int align = 32;
 public:
-    Frame(FrameParams params) {
-        av_frame = av_frame_alloc();
-        params.fill_context(av_frame);
-        av_frame_get_buffer(av_frame, 0);
-    }
+    // Frame(FrameParams params) {
+    //     av_frame = av_frame_alloc();
+    //     params.fill_context(av_frame);
+    //     av_frame_get_buffer(av_frame, 0);
+    // }
     // create empty frame
     Frame() { av_frame = NULL; }
     ~Frame() { av_frame_free(&av_frame); }

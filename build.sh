@@ -38,25 +38,21 @@ CONFIG_ARGS=(
 cd $ROOT/FFmpeg
 emconfigure ./configure "${CONFIG_ARGS[@]}"
 emmake make -j4
-# build ffmpeg.wasm
-mkdir -p wasm/dist
-ARGS=(
-  -I. #-I./fftools
-  -Llibavcodec -Llibavdevice -Llibavfilter -Llibavformat -Llibavresample -Llibavutil -Llibpostproc -Llibswscale -Llibswresample
-  -Qunused-arguments
-  -o wasm/dist/ffmpeg.js fftools/ffmpeg_opt.c fftools/ffmpeg_filter.c fftools/ffmpeg_hw.c fftools/cmdutils.c fftools/ffmpeg.c
-  -lavdevice -lavfilter -lavformat -lavcodec -lswresample -lswscale -lavutil -lm
-  # -s USE_SDL=2                    # use SDL2
-  # -s USE_PTHREADS=1               # enable pthreads support
-  -s INITIAL_MEMORY=33554432      # 33554432 bytes = 32 MB
-)
-emcc "${ARGS[@]}"
 # end of compiling FFmpeg, jump back to the root
 cd $ROOT
 
 
-# build src/cpp
-emmake make
-
-# link above object files
-# emcc ./src/cpp/...main.o -lembind -o ./build/ffmpeg.js # -O3
+# build ffmpeg.wasm (FFmpeg library + src/cpp/*)
+mkdir -p wasm/dist
+ARGS=(
+  # -I.
+  -Isrc/cpp
+  -Llibavcodec -Llibavfilter -Llibavformat -Llibavutil
+  -Qunused-arguments
+  -lembind
+  -o wasm/dist/ffmpeg.js src/cpp/*.cpp
+  -lavfilter -lavformat -lavcodec -lavutil
+  -s INITIAL_MEMORY=33554432      # 33554432 bytes = 32 MB
+  # -O3
+)
+emcc "${ARGS[@]}"

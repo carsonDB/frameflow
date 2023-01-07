@@ -14,8 +14,8 @@ const vec2Array = <T>(vec: Module.Vector<T>) => {
 
 function streamMetadataToInfo(s: StreamMetadata): Module.StreamInfo {
     const format = s.mediaType == 'audio' ? s.sampleFormat : s.pixelFormat
-    const defaultParams = {width: 0, height: 0, frameRate: {num: 0, den: 0}, sampleRate: 0, 
-        channelLayout: '', channels: 0, sampleAspectRatio: {num: 0, den: 0} }
+    const defaultParams = {width: 0, height: 0, frameRate: {num: 0, den: 1}, sampleRate: 0, 
+        channelLayout: '', channels: 0, sampleAspectRatio: {num: 0, den: 1} }
     return {...defaultParams, ...s, format}
 }
 
