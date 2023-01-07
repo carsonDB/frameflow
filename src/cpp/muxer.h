@@ -57,7 +57,7 @@ public:
             av_freep(&io_ctx->buffer);
         avio_context_free(&io_ctx);
         avformat_free_context(format_ctx);
-        format_ctx->pb != NULL & avio_closep(&format_ctx->pb);
+        format_ctx->pb != NULL && avio_closep(&format_ctx->pb);
     }
 
     static InferredFormatInfo inferFormatInfo(string format_name, string filename) {
@@ -69,6 +69,10 @@ public:
     }
     
     void newStream(Encoder& encoder) {
+        /* Some formats want stream headers to be separate. */
+        if (format_ctx->oformat->flags & AVFMT_GLOBALHEADER)
+            encoder.setFlags(AV_CODEC_FLAG_GLOBAL_HEADER);
+
         streams.push_back(Stream(format_ctx, encoder));
     }
 
@@ -76,13 +80,17 @@ public:
     //     streams.push_back(Stream(format_ctx, stream)); 
     // }
 
-    void openIO() { avio_open(&format_ctx->pb, NULL, AVIO_FLAG_WRITE); };
+    void openIO() { avio_open(&format_ctx->pb, NULL, AVIO_FLAG_WRITE); }
     void writeHeader() { avformat_write_header(format_ctx, NULL); }
     void writeTrailer() { av_write_trailer(format_ctx); }
     void writeFrame(Packet& packet) {
-        // av_packet_rescale_ts(pkt, c->time_base, st->time_base);
-       int ret = av_interleaved_write_frame(format_ctx, packet.av_packet());
-       CHECK(ret == 0, "interleave write frame error");
+        auto av_pkt = packet.av_packet();
+        /* rescale output packet timestamp values from codec to stream timebase */
+        // av_packet_rescale_ts(av_pkt, c->time_base, st->time_base);
+        // av_pkt->stream_index = st->index;
+        // todo...
+        int ret = av_interleaved_write_frame(format_ctx, av_pkt);
+        CHECK(ret >= 0, "interleave write frame error");
 
     }
 };

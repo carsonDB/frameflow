@@ -31,6 +31,7 @@ public:
         encode(f);
     }
 // c++ only
+    void setFlags(int flag) { codec_ctx->flags |= flag; }
     const AVCodecContext* av_codecContext_ptr() { return codec_ctx; }
 };
 

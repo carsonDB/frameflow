@@ -17,7 +17,7 @@ public:
         packet->pts = pts;
     }
     ~Packet() { av_packet_free(&packet); };
-    bool isEmpty() { packet->data == NULL; }
+    bool isEmpty() { return packet->data == NULL; }
     int stream_index() { return packet->stream_index; }
     val getData() { 
         return val(typed_memory_view(packet->size, packet->data)); // check length of data
