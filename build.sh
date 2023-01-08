@@ -17,8 +17,8 @@ ARGS=(
   # -I.
   -Isrc/cpp src/cpp/*.cpp
   -I$FFMPEG
-  -L$FFMPEG/libavcodec -L$FFMPEG/libavfilter -L$FFMPEG/libavformat -L$FFMPEG/libavutil
-  -lavfilter -lavformat -lavcodec -lavutil
+  -L$FFMPEG/libavcodec -L$FFMPEG/libavfilter -L$FFMPEG/libavformat -L$FFMPEG/libavutil -L$FFMPEG/libswresample -L$FFMPEG/libswscale
+  -lavfilter -lavformat -lavcodec -lavutil -lswresample -lswscale
   -Qunused-arguments
   -lembind
   -o wasm/dist/ffmpeg.js

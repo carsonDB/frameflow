@@ -3,14 +3,9 @@
 
 #include <string>
 #include <vector>
-extern "C" {
-    #include <libavcodec/avcodec.h>
-    #include <libavformat/avformat.h>
-    #include <libavutil/opt.h>
-}
 
+#include "metadata.h"
 #include "packet.h"
-#include "stream.h"
 #include "frame.h"
 #include "utils.h"
 

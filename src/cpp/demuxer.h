@@ -7,27 +7,11 @@ extern "C" {
     #include <libavformat/avformat.h>
 }
 
+#include "metadata.h"
 #include "utils.h"
 #include "stream.h"
 #include "packet.h"
 
-
-struct FormatInfo {
-    std::string format_name;
-    int64_t bit_rate;
-    int64_t duration;
-    std::vector<StreamInfo> streamInfos;
-    FormatInfo(AVFormatContext* p) {
-        format_name = p->iformat->name;
-        bit_rate = p->bit_rate;
-        duration = p->duration;
-        for (int i = 0; i < p->nb_streams; i++) {
-            auto codec_type = p->streams[i]->codecpar->codec_type;
-            if (codec_type == AVMEDIA_TYPE_VIDEO || codec_type == AVMEDIA_TYPE_AUDIO)
-                streamInfos.push_back(StreamInfo(p->streams[i]));
-        }
-    }
-};
 
 
 class DeMuxer {
@@ -58,7 +42,7 @@ public:
         auto ret = av_read_frame(format_ctx, pkt->av_packet());
         return *pkt;
     }
-    FormatInfo getMetadata() { return FormatInfo(format_ctx); }
+    FormatInfo getMetadata() { return createFormatInfo(format_ctx); }
 
 // only for c++    
     AVFormatContext* av_format_context() { return format_ctx; }

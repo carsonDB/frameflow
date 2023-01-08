@@ -71,7 +71,8 @@ declare namespace Module {
     class Packet {
         constructor(bufSize: number, pts: number)
         isEmpty: boolean
-        streamIndex: number
+        get streamIndex(): number
+        set streamIndex(index: number)
         getData(): Uint8Array
         delete(): void
     }

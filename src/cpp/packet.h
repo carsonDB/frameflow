@@ -17,10 +17,11 @@ public:
         packet->pts = pts;
     }
     ~Packet() { av_packet_free(&packet); };
-    bool isEmpty() { return packet->data == NULL; }
-    int stream_index() { return packet->stream_index; }
-    val getData() { 
-        return val(typed_memory_view(packet->size, packet->data)); // check length of data
+    bool isEmpty() const { return packet->data == NULL; }
+    int stream_index() const { return packet->stream_index; }
+    void set_stream_index(int index) { packet->stream_index = index; }
+    emscripten::val getData() { 
+        return emscripten::val(emscripten::typed_memory_view(packet->size, packet->data)); // check length of data
     }
     AVPacket* av_packet() { return packet; }
 };

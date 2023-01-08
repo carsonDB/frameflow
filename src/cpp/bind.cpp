@@ -2,22 +2,45 @@
 #define BIND_H
 
 #include <emscripten/bind.h>
+#include "metadata.h"
+#include "stream.h"
+#include "encode.h"
 #include "demuxer.h"
 #include "decode.h"
-#include "stream.h"
 #include "filter.h"
 #include "muxer.h"
 #include "utils.h"
 using namespace emscripten;
 
 
-EMSCRIPTEN_BINDINGS(demuxer) {
-    class_<FormatInfo>("FormatInfo")
-        .property("formatName", &FormatInfo::format_name)
-        .property("bitRate", &FormatInfo::bit_rate)
-        .property("duration", &FormatInfo::duration)
-        .property("streamInfos", &FormatInfo::streamInfos)
+EMSCRIPTEN_BINDINGS(metadata) {
+    value_object<StreamInfo>("StreamInfo")
+        .field("index", &StreamInfo::index)
+        .field("timeBase", &StreamInfo::time_base)
+        .field("bitRate", &StreamInfo::bit_rate)
+        .field("startTime", &StreamInfo::start_time)
+        .field("duration", &StreamInfo::duration)
+        .field("mediaType", &StreamInfo::codec_type)
+        .field("codecName", &StreamInfo::codec_name)
+        .field("format", &StreamInfo::format)
+        .field("width", &StreamInfo::width)
+        .field("height", &StreamInfo::height)
+        .field("frameRate", &StreamInfo::frame_rate)
+        .field("sampleAspectRatio", &StreamInfo::sample_aspect_ratio)
+        .field("sampleRate", &StreamInfo::sample_rate)
+        .field("channelLayout", &StreamInfo::channel_layout)
+        .field("channels", &StreamInfo::channels)
     ;
+
+    value_object<FormatInfo>("FormatInfo")
+        .field("formatName", &FormatInfo::format_name)
+        .field("bitRate", &FormatInfo::bit_rate)
+        .field("duration", &FormatInfo::duration)
+        .field("streamInfos", &FormatInfo::streamInfos)
+    ;
+}
+
+EMSCRIPTEN_BINDINGS(demuxer) {
 
     class_<DeMuxer>("DeMuxer")
         .constructor<std::string>()
@@ -39,30 +62,14 @@ EMSCRIPTEN_BINDINGS(decode) {
 }
 
 EMSCRIPTEN_BINDINGS(stream) {
-    class_<StreamInfo>("StreamInfo")
-        .property("index", &StreamInfo::index)
-        .property("timeBase", &StreamInfo::time_base)
-        .property("bitRate", &StreamInfo::bit_rate)
-        .property("startTime", &StreamInfo::start_time)
-        .property("duration", &StreamInfo::duration)
-        .property("mediaType", &StreamInfo::codec_type)
-        .property("codecName", &StreamInfo::codec_name)
-        .property("format", &StreamInfo::format)
-        .property("width", &StreamInfo::width)
-        .property("height", &StreamInfo::height)
-        .property("frameRate", &StreamInfo::frame_rate)
-        .property("sampleAspectRatio", &StreamInfo::sample_aspect_ratio)
-        .property("sampleRate", &StreamInfo::sample_rate)
-        .property("channelLayout", &StreamInfo::channel_layout)
-        .property("channels", &StreamInfo::channels)
-    ;
+    
 }
 
 EMSCRIPTEN_BINDINGS(packet) {
     class_<Packet>("Packet")
         .constructor<int, int64_t>()
         .property("isEmpty", &Packet::isEmpty)
-        .property("streamIndex", &Packet::stream_index)
+        .property("streamIndex", &Packet::stream_index, &Packet::set_stream_index)
         .function("getData", &Packet::getData)
     ;
 }
@@ -89,7 +96,7 @@ EMSCRIPTEN_BINDINGS(encode) {
     ;
     
     class_<Encoder>("Encoder")
-        .constructor<std::string, std::string>()
+        .constructor<StreamInfo>()
         .function("encode", &Encoder::encode)
         .function("flush", &Encoder::flush)
     ;

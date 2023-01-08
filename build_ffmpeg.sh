@@ -22,7 +22,7 @@ CONFIG_ARGS=(
   --disable-inline-asm    # disable inline asm
   --disable-stripping     # disable stripping
   --disable-programs
-  --disable-ffmpeg
+  --disable-avdevice
   --disable-ffplay
   --disable-ffprobe
   --disable-network

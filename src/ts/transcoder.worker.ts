@@ -285,6 +285,7 @@ class ImageSourceReader {
 class FileTargetWriter {
     node: TargetNode
     encoders: {[streamId: string]: Module.Encoder} = {}
+    targetStreamIndexes: {[streamId: string]: number} = {}
     muxer: Module.Muxer
     outputs: Uint8Array[] = []
     firstWrite = false
@@ -294,8 +295,11 @@ class FileTargetWriter {
         this.muxer = new Module.Muxer(node.format.container.formatName, data => this.outputs.push(data))
         node.outStreams.forEach((s, i) => {
             const encoder = new Module.Encoder(streamMetadataToInfo(s))
-            this.encoders[streamId(node.id, i)] = encoder
+            const {from, index} = node.inStreams[i]
+            // use inStream ref
+            this.encoders[streamId(from.id, index)] = encoder
             this.muxer.newStream(encoder)
+            this.targetStreamIndexes[streamId(from.id, index)] = i
         })
     }
     
@@ -322,7 +326,10 @@ class FileTargetWriter {
         Object.entries(frames).forEach(([streamId, frame]) => {
             if (!this.encoders[streamId] || !frame) return
             const pktVec = this.encoders[streamId].encode(frame)
-            vec2Array(pktVec).forEach(pkt => this.muxer.writeFrame(pkt))
+            vec2Array(pktVec).forEach(pkt => {
+                pkt.streamIndex = this.targetStreamIndexes[streamId];
+                this.muxer.writeFrame(pkt)
+            })
         })
     }
 
@@ -348,8 +355,6 @@ class ImageTargetWriter {
         this.node = node
         if (node.outStreams.length != 1 || node.outStreams[0].mediaType != 'video')
             throw `image writer only allow one video stream`
-        const stream = node.outStreams[0]
-        const params = `height:${stream.height};width:${stream.width};time_base:1/1`
         this.encoder = new Module.Encoder(streamMetadataToInfo(node.outStreams[0]))
     }
 
@@ -360,7 +365,9 @@ class ImageTargetWriter {
             vec2Array(pktVec).forEach(pkt => this.outputs.push(pkt.getData()))
             return
         }
-        const frame = frames[streamId(this.node.id, 0)]
+        // use inStream ref
+        const {from, index} = this.node.inStreams[0]
+        const frame = frames[streamId(from.id, index)]
         if (!frame) return
         const pktVec = this.encoder.encode(frame)
         vec2Array(pktVec).forEach(pkt => this.outputs.push(pkt.getData()))

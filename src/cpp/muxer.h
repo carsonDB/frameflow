@@ -81,13 +81,16 @@ public:
     // }
 
     void openIO() { avio_open(&format_ctx->pb, NULL, AVIO_FLAG_WRITE); }
-    void writeHeader() { avformat_write_header(format_ctx, NULL); }
+    void writeHeader() { 
+        auto ret = avformat_write_header(format_ctx, NULL); 
+        CHECK(ret >= 0, "Error occurred when opening output file");
+    }
     void writeTrailer() { av_write_trailer(format_ctx); }
     void writeFrame(Packet& packet) {
         auto av_pkt = packet.av_packet();
+        auto out_av_stream = streams[av_pkt->stream_index].av_stream_ptr();
         /* rescale output packet timestamp values from codec to stream timebase */
-        // av_packet_rescale_ts(av_pkt, c->time_base, st->time_base);
-        // av_pkt->stream_index = st->index;
+        // av_packet_rescale_ts(av_pkt, av_pkt->time_base, out_av_stream->time_base);
         // todo...
         int ret = av_interleaved_write_frame(format_ctx, av_pkt);
         CHECK(ret >= 0, "interleave write frame error");

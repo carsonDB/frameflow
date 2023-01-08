@@ -6,7 +6,7 @@ Encoder::Encoder(StreamInfo info) {
     CHECK(codec, "Could not allocate video codec context");
     codec_ctx = avcodec_alloc_context3(codec);
     CHECK(codec_ctx, "Could not allocate video codec context");
-    info.set_avcodec_context_options(codec_ctx);
+    set_avcodec_context_from_streamInfo(info, codec_ctx);
     // todo... remove
     // if (codec->id == AV_CODEC_ID_H264)
     //     av_opt_set(codec_ctx->priv_data, "preset", "slow", 0);
