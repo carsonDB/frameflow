@@ -13,6 +13,7 @@ source $EMSDK_ROOT/emsdk_env.sh
 
 # configure FFmpeg with Emscripten
 CFLAGS="" #"-s USE_PTHREADS"
+# CFLAGS="$CFLAGS -O3"
 LDFLAGS="$CFLAGS -s INITIAL_MEMORY=33554432" # 33554432 bytes = 32 MB
 CONFIG_ARGS=(
   --target-os=none        # use none to prevent any os specific configurations
@@ -27,6 +28,9 @@ CONFIG_ARGS=(
   --disable-ffprobe
   --disable-network
   --disable-sdl2
+  --disable-doc
+  --extra-cflags="$CFLAGS"
+  --extra-cxxflags="$CFLAGS"
   --extra-ldflags="$LDFLAGS"
   --nm="$LLVM_NM -g"
   --ar=emar
@@ -41,5 +45,3 @@ CONFIG_ARGS=(
 cd $FFMPEG
 emconfigure ./configure "${CONFIG_ARGS[@]}"
 emmake make -j4
-# end of compiling FFmpeg, jump back to the root
-cd $ROOT

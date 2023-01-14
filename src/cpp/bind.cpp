@@ -43,7 +43,7 @@ EMSCRIPTEN_BINDINGS(metadata) {
 EMSCRIPTEN_BINDINGS(demuxer) {
 
     class_<DeMuxer>("DeMuxer")
-        .constructor<std::string>()
+        .constructor<emscripten::val>()
         .property("streams", &DeMuxer::getStreams)
         .function("seek", &DeMuxer::seek)
         .function("read", &DeMuxer::read)

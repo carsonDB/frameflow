@@ -24,11 +24,10 @@ struct InferredFormatInfo {
 };
 
 
-// Custom reading avio https://www.codeproject.com/Tips/489450/Creating-Custom-FFmpeg-IO-Context
 // Custom writing avio https://ffmpeg.org/pipermail/ffmpeg-devel/2014-November/165014.html
-int writeFn(void* opaque, uint8_t* buf, int buf_size) {
+int write_packet(void* opaque, uint8_t* buf, int buf_size) {
     auto onWrite = (emscripten::val*)opaque;
-    auto data = emscripten::val(typed_memory_view(buf_size, buf));
+    auto data = emscripten::val(emscripten::typed_memory_view(buf_size, buf));
     (*onWrite)(data);
     return buf_size;
     
@@ -46,7 +45,7 @@ public:
     Muxer(string format, emscripten::val onWrite) {
         // create buffer for writing
         buffer = (uint8_t*)av_malloc(buf_size);
-        io_ctx = avio_alloc_context(buffer, buf_size, 1, &onWrite, NULL, writeFn, NULL);
+        io_ctx = avio_alloc_context(buffer, buf_size, 1, &onWrite, NULL, write_packet, NULL);
         avformat_alloc_output_context2(&format_ctx, NULL, format.c_str(), NULL);
         CHECK(format_ctx, "Could not create output format context");
         format_ctx->pb = io_ctx;

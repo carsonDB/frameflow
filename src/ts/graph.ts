@@ -3,7 +3,7 @@
  *  UserGraph -> GraphConfig -> GraphRuntime
  */
 
-import { Reader } from "./streamIO"
+import { AVRational, ModuleType } from "./ffmpeg.wasm"
 import { SourceReader, TargetWriter } from "./transcoder.worker"
 
 
@@ -19,7 +19,7 @@ export interface FormatMetadata {
 
 interface CommonStreamMetadata {
     index: number,
-    timeBase: Module.AVRational
+    timeBase: AVRational
     startTime: number,
     duration: number,
     bitRate: number,
@@ -31,8 +31,8 @@ export interface VideoStreamMetadata extends CommonStreamMetadata {
     height: number,
     width: number,
     pixelFormat: string
-    frameRate: Module.AVRational
-    sampleAspectRatio: Module.AVRational
+    frameRate: AVRational
+    sampleAspectRatio: AVRational
 }
 
 export interface AudioStreamMetadata extends CommonStreamMetadata {
@@ -55,8 +55,8 @@ export interface StreamRef { from: SourceNode | FilterNode, index: number }
 
 export interface SourceNode {
     type: 'source', id: string, outStreams: StreamMetadata[],
-    format: { type: 'file', url: string | File, container: FormatMetadata } | 
-            { type: 'stream', elementType: 'image' | 'chunk', reader: Reader }
+    format: { type: 'file', container: FormatMetadata } | 
+            { type: 'stream', elementType: 'image' | 'chunk' }
 }
 
 export interface FilterNode {
@@ -119,6 +119,6 @@ type TargetRuntime =
 
 export interface GraphRuntime {
     sources: SourceRuntime[]
-    filterers?: Module.Filterer
+    filterers?: ModuleType['Filterer']
     targets: TargetRuntime[]
 }

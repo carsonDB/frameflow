@@ -1,19 +1,44 @@
 /**
  * track or track group for user convient api
  */
+import { v4 as uuid } from 'uuid'
 
-import { randomUUID } from "crypto"
-import { createWriteStream, writeFile } from "fs"
-import { ExportArgs, Exporter } from "./streamIO"
 import { applyMulitpleFilter, applySingleFilter, Filter, FilterArgs } from "./filters"
 import { FormatMetadata, SourceNode, StreamMetadata, StreamRef } from "./graph"
 import { FFWorker } from "./message"
+import { createTargetNode, DataBuffer, ExportArgs, Exporter, Reader, sourceToStream, SourceType } from "./streamIO"
 
 
-// todo... path replace
+// webpack 5 support new URL('', import.meta.url)
 export const workerPaths = {
-    transcoder: './execute.worker.ts',
+    transcoder: new URL('./transcoder.worker.ts', import.meta.url),
 }
+
+
+async function createSource(src: SourceType, options: {}) {
+    // convert all src to stream
+    const sourceStream = await sourceToStream(src)
+    const reader = new Reader(sourceStream, options)
+    // get probe data from stream
+    let toProbeSize = 1024*1024
+    const inputs: DataBuffer[] = []
+    while (!reader.end && toProbeSize > 0) {
+        const data = await reader.probe()
+        if (!data) continue
+        inputs.push(data)
+        toProbeSize -= data.byteLength
+    }
+    // start a worker to probe data
+    const worker = new FFWorker(workerPaths.transcoder)
+    const metadata = await worker.send('getMetadata', {inputs})
+    const srcTracks = new SourceTrackGroup(metadata.streams, metadata.container)
+    // ready to end
+    worker.close()
+    reader.cacheFor(srcTracks.node)
+
+    return srcTracks
+}
+
 
 class TrackGroup {
     streams: StreamRef[]
@@ -44,7 +69,9 @@ class TrackGroup {
 
     // export media in stream
     async export(args: ExportArgs) {
-        const exporter = new Exporter(this.streams, args)
+        const worker = new FFWorker(workerPaths.transcoder)
+        const node = await createTargetNode(this.streams, args, worker)
+        const exporter = new Exporter(node, worker)
         await exporter.build()
         return exporter
     }
@@ -53,8 +80,10 @@ class TrackGroup {
      */
     async exportTo(url: string, args?: ExportArgs) {
         const exporter = await this.export({...args, url})
-        const writer = createWriteStream(url)
+        const { createWriteStream } = require('fs')
+        const writer = createWriteStream(url) as NodeJS.WriteStream
         await exporter.forEach(async data => { writer.write(data) })
+        writer.end()
     }
 }
 
@@ -69,11 +98,12 @@ class Track extends TrackGroup {
 
 
 export class SourceTrackGroup extends TrackGroup {
-    
-    constructor(url: string | File, streams: StreamMetadata[], format: FormatMetadata) {
-        const node: SourceNode = { type:'source', outStreams: streams, id: randomUUID(),
-            format: { type: 'file', url, container: format } }
+    node: SourceNode
+    constructor(streams: StreamMetadata[], format: FormatMetadata) {
+        const node: SourceNode = { type:'source', outStreams: streams, id: uuid(),
+            format: { type: 'file', container: format } }
         super(streams.map((s, i) => ({from: node, index: i}) ))
+        this.node = node
     }
 
 }
@@ -105,15 +135,6 @@ const multipleFilter = {
     concat: (trackArr: (TrackGroup | Track)[]) => 
         new FilterTrackGroup({ type: 'concat' }, null, trackArr.map(t => t.streams))
 }
-
-
-async function createSource(src: string | File | ReadableStream, options: {}) {
-    const workerSender = new FFWorker(workerPaths.transcoder)
-    if (src instanceof ReadableStream) throw `not implemented yet`
-    const metadata = await workerSender.send('getMetadata', {input: src})
-    return new SourceTrackGroup(src, metadata.streams, metadata.container)
-}
-
 
 
 export default {

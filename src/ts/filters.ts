@@ -1,5 +1,5 @@
-import { randomUUID } from "crypto"
-import { AudioStreamMetadata, FilterNode, StreamRef, VideoStreamMetadata } from "./graph"
+import { v4 as uuid } from 'uuid';
+import { AudioStreamMetadata, FilterNode, StreamRef } from "./graph";
 
 export type FilterArgs<T extends Filter['type']> = Extract<Filter, { type: T, args: any }>['args']
 export type Filter = 
@@ -27,7 +27,7 @@ export function applyMulitpleFilter(streamRefsArr: StreamRef[][], filter: Filter
             if (streamRefsArr.some(refs => refs.length != streamRefsArr[0].length))
                 throw `${filter.type}: all segments should have same audio/video tracks`
             const duration = streamRefsArr.reduce((acc, refs) => acc + refs[0].from.outStreams[refs[0].index].duration, 0)
-            const from: FilterNode = {type: 'filter', inStreams: streamRefsArr.flat(), id: randomUUID(),
+            const from: FilterNode = {type: 'filter', inStreams: streamRefsArr.flat(), id: uuid(),
                 outStreams: streamRefsArr[0].map(r => ({...r.from.outStreams[r.index], duration})), 
                 filter: {name: 'concat', args: {n, v, a}} }
             return from.outStreams.map((_, i) => ({from, index: i}))
@@ -44,7 +44,7 @@ export function applyMulitpleFilter(streamRefsArr: StreamRef[][], filter: Filter
             if (inAudioStreams.some(m => m.sampleFormat != inAudioStreams[0].sampleFormat))
                 throw `${filter.type}: all inputs must have same sampleFormat`
             // out stream metadata mainly use first one
-            const from: FilterNode = {type: 'filter', inStreams: audioStreamRefs, id: randomUUID(), 
+            const from: FilterNode = {type: 'filter', inStreams: audioStreamRefs, id: uuid(), 
                 outStreams: [{...inAudioStreams[0], duration}], 
                 filter: {name: 'amerge', args: {inputs: audioStreamRefs.length}}}
             return [...streamRefs.filter(ref => ref.from.outStreams[ref.index].mediaType != 'audio'),
@@ -70,7 +70,7 @@ export function applySingleFilter(streamRefs: StreamRef[], filter: Filter): Stre
                 if (args.startTime < s.startTime || args.duration > s.duration)
                     throw 'trim range (absolute) has exceeded input range'
                 const from: FilterNode = {
-                    type: 'filter', filter: {name, args}, id: randomUUID(), 
+                    type: 'filter', filter: {name, args}, id: uuid(), 
                     inStreams: [streamRef], outStreams: [{...s, ...args}] }
                 return {from, index: 0}
             }
@@ -78,7 +78,7 @@ export function applySingleFilter(streamRefs: StreamRef[], filter: Filter): Stre
                 const args = filter.args
                 const name = s.mediaType == 'audio' ? 'aloop' : 'loop'
                 const from: FilterNode = {
-                    type: 'filter', filter: {name, args: {loop: args}}, id: randomUUID(),
+                    type: 'filter', filter: {name, args: {loop: args}}, id: uuid(),
                     inStreams: [streamRef], outStreams: [{...s, duration: args*s.duration}]
                 }
                 return {from, index: 0}
@@ -87,7 +87,7 @@ export function applySingleFilter(streamRefs: StreamRef[], filter: Filter): Stre
                 const args = filter.args
                 if (s.mediaType == 'video') return streamRef
                 const from: FilterNode = {
-                    type: 'filter', filter: {name: 'volume', args: {volume: args}}, id: randomUUID(),
+                    type: 'filter', filter: {name: 'volume', args: {volume: args}}, id: uuid(),
                     inStreams: [streamRef], outStreams: [{...s, volume: args}]}
                 return {from, index: 0}
             }
