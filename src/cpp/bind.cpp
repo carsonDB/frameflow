@@ -42,19 +42,19 @@ EMSCRIPTEN_BINDINGS(metadata) {
 
 EMSCRIPTEN_BINDINGS(demuxer) {
 
-    class_<DeMuxer>("DeMuxer")
+    class_<Demuxer>("Demuxer")
         .constructor<emscripten::val>()
-        .property("streams", &DeMuxer::getStreams)
-        .function("seek", &DeMuxer::seek)
-        .function("read", &DeMuxer::read)
-        .function("getMetadata", &DeMuxer::getMetadata)
+        // .property("streams", &Demuxer::getStreams)
+        .function("seek", &Demuxer::seek)
+        .function("read", &Demuxer::read)
+        .function("getMetadata", &Demuxer::getMetadata)
     ;
 }
 
 EMSCRIPTEN_BINDINGS(decode) {
     class_<Decoder>("Decoder")
         .constructor<std::string>()
-        .constructor<DeMuxer&, int>()
+        .constructor<Demuxer&, int>()
         .function("decode", &Decoder::decode)
         .function("flush", &Decoder::flush)
         ;

@@ -49,7 +49,11 @@ setInterval(() => {
 todo...
 
 ## How to build (linux)
+*Warning: [webpack dev mode cannot hot reload in WSL2 (windows).](https://mbuotidem.github.io/blog/2021/01/09/how-to-hot-reload-auto-refresh-react-app-on-WSL.html)*
+
+
 ```
+./build_ffmpeg.sh
 ./build.sh
 ```
 Reference: [Build FFmpeg WebAssembly version (= ffmpeg.wasm): Part.2 Compile with Emscripten](https://jeromewu.github.io/build-ffmpeg-webassembly-version-part-2-compile-with-emscripten/)

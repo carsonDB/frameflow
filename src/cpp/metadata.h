@@ -1,6 +1,7 @@
 #ifndef METADATA_H
 #define METADATA_H
 
+// #include <cstdio>
 #include <string>
 #include <vector>
 
@@ -28,9 +29,9 @@ struct StreamInfo {
     AVRational frame_rate;
     AVRational sample_aspect_ratio;
     // audio
-    int channels;
     int sample_rate;
     string channel_layout;
+    int channels;
 
 };
 

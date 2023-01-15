@@ -3,10 +3,7 @@
  *  UserGraph -> GraphConfig -> GraphRuntime
  */
 
-import { AVRational, ModuleType } from "./ffmpeg.wasm"
-import { SourceReader, TargetWriter } from "./transcoder.worker"
-
-
+interface Rational {num: number, den: number}
 /**
  * all kinds of metadata infomation
  */
@@ -19,7 +16,7 @@ export interface FormatMetadata {
 
 interface CommonStreamMetadata {
     index: number,
-    timeBase: AVRational
+    timeBase: Rational
     startTime: number,
     duration: number,
     bitRate: number,
@@ -31,8 +28,8 @@ export interface VideoStreamMetadata extends CommonStreamMetadata {
     height: number,
     width: number,
     pixelFormat: string
-    frameRate: AVRational
-    sampleAspectRatio: AVRational
+    frameRate: Rational
+    sampleAspectRatio: Rational
 }
 
 export interface AudioStreamMetadata extends CommonStreamMetadata {
@@ -103,22 +100,4 @@ export function buildGraphConfig(target: TargetNode): GraphConfig {
     target.inStreams.forEach(ref => ref.from.type == 'filter' && filterConfig.outputs.push(ref))
 
     return {sources, filterConfig: (filterConfig.filters.length > 0 ? filterConfig: undefined), target}
-}
-
-
-
-
-/**
- * execute runtime for a given graph config
- */
-type SourceRuntime = 
-    { type: 'file' | 'image', config: SourceNode, reader: SourceReader }
-
-type TargetRuntime = 
-    { type: 'file' | 'image', config: TargetNode, writer: TargetWriter }
-
-export interface GraphRuntime {
-    sources: SourceRuntime[]
-    filterers?: ModuleType['Filterer']
-    targets: TargetRuntime[]
 }

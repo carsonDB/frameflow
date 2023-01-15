@@ -5,22 +5,21 @@ import { v4 as uuid } from 'uuid'
 
 import { applyMulitpleFilter, applySingleFilter, Filter, FilterArgs } from "./filters"
 import { FormatMetadata, SourceNode, StreamMetadata, StreamRef } from "./graph"
-import { FFWorker } from "./message"
-import { createTargetNode, DataBuffer, ExportArgs, Exporter, Reader, sourceToStream, SourceType } from "./streamIO"
+import { FFWorker, DataBuffer } from "./message"
+import { createTargetNode, ExportArgs, Exporter, Reader, sourceToStream, SourceType } from "./streamIO"
 
 
-// webpack 5 support new URL('', import.meta.url)
-export const workerPaths = {
-    transcoder: new URL('./transcoder.worker.ts', import.meta.url),
-}
 
+// Warning: webpack 5 only support pattern: new Worker(new URL('', import.meta.url))
+const createWorker = () => new Worker(new URL('./transcoder.worker.ts', import.meta.url))
 
-async function createSource(src: SourceType, options: {}) {
+const probeSize = 1024*1024 * 1
+async function createSource(src: SourceType, options?: {probeSize?: number}) {
     // convert all src to stream
     const sourceStream = await sourceToStream(src)
-    const reader = new Reader(sourceStream, options)
+    const reader = new Reader(sourceStream, options ?? {})
     // get probe data from stream
-    let toProbeSize = 1024*1024
+    let toProbeSize = options?.probeSize ?? probeSize
     const inputs: DataBuffer[] = []
     while (!reader.end && toProbeSize > 0) {
         const data = await reader.probe()
@@ -29,7 +28,7 @@ async function createSource(src: SourceType, options: {}) {
         toProbeSize -= data.byteLength
     }
     // start a worker to probe data
-    const worker = new FFWorker(workerPaths.transcoder)
+    const worker = new FFWorker(createWorker())    
     const metadata = await worker.send('getMetadata', {inputs})
     const srcTracks = new SourceTrackGroup(metadata.streams, metadata.container)
     // ready to end
@@ -69,7 +68,7 @@ class TrackGroup {
 
     // export media in stream
     async export(args: ExportArgs) {
-        const worker = new FFWorker(workerPaths.transcoder)
+        const worker = new FFWorker(createWorker())
         const node = await createTargetNode(this.streams, args, worker)
         const exporter = new Exporter(node, worker)
         await exporter.build()
@@ -104,6 +103,15 @@ export class SourceTrackGroup extends TrackGroup {
             format: { type: 'file', container: format } }
         super(streams.map((s, i) => ({from: node, index: i}) ))
         this.node = node
+    }
+
+    get metadata() { 
+        if (this.node.format.type == 'file') {
+            return {
+                ...this.node.format.container, 
+                streams: this.node.outStreams
+            }
+        }
     }
 
 }

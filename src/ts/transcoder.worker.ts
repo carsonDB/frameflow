@@ -1,8 +1,6 @@
-import { FFmpegModule, getModule, ModuleType, StdVector, StreamInfo } from './ffmpeg.wasm'
-import { GraphConfig, GraphRuntime, SourceNode, StreamMetadata, TargetNode } from "./graph"
-import { WorkerHandlers } from "./message"
-import { DataBuffer } from "./streamIO"
-import { loadModule } from './ffmpeg.wasm'
+import { FFmpegModule, getModule, ModuleType, StdVector, StreamInfo, loadModule } from './ffmpeg.wasm'
+import { GraphConfig, SourceNode, StreamMetadata, TargetNode } from "./graph"
+import { WorkerHandlers, DataBuffer } from "./message"
 
 
 const streamId = (nodeId: string, streamIndex: number) => `${nodeId}:${streamIndex}`
@@ -31,7 +29,20 @@ function streamInfoToMetadata(s: StreamInfo): StreamMetadata {
     else throw `not support other mediaType`
 }
 
-// global variable
+/**
+ * execute runtime for a given graph config
+ */
+type SourceRuntime = 
+    { type: 'file' | 'image', config: SourceNode, reader: SourceReader }
+
+type TargetRuntime = 
+    { type: 'file' | 'image', config: TargetNode, writer: TargetWriter }
+
+export interface GraphRuntime {
+    sources: SourceRuntime[]
+    filterers?: ModuleType['Filterer']
+    targets: TargetRuntime[]
+}
 let graph: GraphRuntime | null = null
 
 const handler = new WorkerHandlers()
@@ -240,15 +251,16 @@ class VideoSourceReader {
     static createDemuxer(module: FFmpegModule, buffers: DataBuffer[]) {
         return new module.Demuxer(buf => {
             const remainBuffers: DataBuffer[] = []
+            buffers.length == 0 && console.warn('demuxer data buffer queue empty')
             const offset = buffers.reduce((offset, b) => {
                 const size = Math.min(buf.byteLength - offset, b.byteLength)
-                buf.set(b.subarray(0, size), offset)
-                b.byteLength > size && remainBuffers.push(b.subarray(size))
+                size > 0 && buf.set(b.subarray(0, size), offset)
+                b.byteLength > size && remainBuffers.push(b.subarray(size, b.byteLength))
                 return offset + size
             }, 0)
             // inplace clear all and push remainBuffers
             buffers.splice(0, buffers.length, ...remainBuffers)
-
+            
             return offset
         })
     }

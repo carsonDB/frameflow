@@ -24,7 +24,7 @@ interface StdMap<T1, T2> {
 // demuxer
 class Demuxer {
     constructor(onRead: (buffer: Uint8Array) => number)
-    streams: StdVector<Frame>
+    // streams: StdVector<Frame>
     seek(t: number, streamIndex: number): void
     read(): Packet
     getMetadata(): FormatInfo

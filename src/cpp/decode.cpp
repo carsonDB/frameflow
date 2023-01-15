@@ -1,9 +1,9 @@
 #include "decode.h"
 
 
-Decoder::Decoder(DeMuxer& demuxer, int stream_index) {
-    auto stream = demuxer.getStreams()[stream_index];
-    auto codecpar = stream.av_stream_ptr()->codecpar;
+Decoder::Decoder(Demuxer& demuxer, int stream_index) {
+    auto stream = demuxer.av_stream(stream_index);
+    auto codecpar = stream->codecpar;
     auto codec = avcodec_find_decoder(codecpar->codec_id);
     CHECK(codec != NULL, "Could not find input codec");
     codec_ctx = avcodec_alloc_context3(codec);

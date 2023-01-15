@@ -29,7 +29,10 @@ ARGS=(
   -s FETCH # download wasm and cache
   -s MODULARIZE=1
   -s EXPORT_ES6=1
-  -s ENVIRONMENT='web,worker,node'
+  -s EXPORT_NAME=$NAME
+  -s WASM_BIGINT=1 # need platform support JS BigInt
+  # -s ENVIRONMENT='web,worker,node'
+  -s ENVIRONMENT='web,worker'
   # -s EXPORTED_RUNTIME_METHODS=["FS"]
 
   # optimization for production phase
@@ -39,4 +42,5 @@ ARGS=(
 em++ "${ARGS[@]}"
 
 # copy *.d.ts to enable typescript
+echo "copy $NAME.d.ts to $WASM_DIR/$NAME.d.ts"
 cp src/ts/types/ffmpeg.d.ts $WASM_DIR/$NAME.d.ts

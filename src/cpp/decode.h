@@ -17,7 +17,7 @@ using namespace std;
 class Decoder {
     AVCodecContext* codec_ctx;
 public:
-    Decoder(DeMuxer& demuxer, int stream_index);
+    Decoder(Demuxer& demuxer, int stream_index);
     Decoder(string codec_name);
     ~Decoder() { avcodec_free_context(&codec_ctx); };
     std::vector<Frame> decode(Packet& pkt);

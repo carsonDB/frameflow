@@ -4,21 +4,22 @@ const HtmlWebpackPlugin = require('html-webpack-plugin');
 
 
 const basicConfig = {
-    entry: './src/ts/main.ts',
+    entry: { frameflow: './src/ts/main.ts' },
     module: {
         rules: [
             { test: /\.ts?$/, use: 'ts-loader', exclude: /node_modules/ },
-            { test: /\.wasm$/, type: `asset/resource` }
+            { test: /\.wasm$/, type: `asset/resource` },
+            // { test: /ffmpeg.js$/, parser: { javascript: { url: false } } }
         ],
     },
 
     resolve: {
         extensions: ['.ts', '...'],
-        fallback: { events: false, fs: false }
+        fallback: { events: false, fs: false, module: false, url: false, crypto: false, path: false }
     },
 
     output: {
-        filename: 'bundle.js',
+        filename: '[name].js',
         library: {
             type: 'umd',
             export: 'default',
@@ -33,7 +34,12 @@ const basicConfig = {
 // for development
 const devConfig = {
     mode: 'development',
-    plugins: [new HtmlWebpackPlugin()],
+    plugins: [
+        new HtmlWebpackPlugin({ 
+            title: 'frameflow dev',
+            template: 'examples/browser/index.html',
+        })
+    ],
     devServer: {
         static: path.join(__dirname, "dist"),
     },

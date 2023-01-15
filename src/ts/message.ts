@@ -1,7 +1,6 @@
 // import { Worker } from 'worker_threads'
 
 import { FormatMetadata, GraphConfig, StreamMetadata } from "./graph"
-import { DataBuffer } from './streamIO'
 
 
 // type MessageType = SendMessage['type']
@@ -18,6 +17,7 @@ import { DataBuffer } from './streamIO'
 //         outputs: {[nodeId in string]?: DataBuffer[]}, needInputs: string[], endWriting: boolean} 
 //     } |
 //     { type: 'deleteGraph', data: undefined }
+export type DataBuffer = Uint8Array | Buffer
 
 type MessageType = keyof Messages
 interface Messages {
@@ -44,17 +44,14 @@ interface Messages {
 }
 
 
-/**
- * 
- */
-// type ReplyData<T extends MessageType> = Extract<ReplyMessage, { type: T }>['data'] | undefined
 export class FFWorker {
     worker: Worker
     // #listeners: { [k in string]?: (replyData: ReplyMessage['data']) => void } = {}
-
-    constructor(url: string | URL) {
+    
+    constructor(worker: Worker) {
+        this.worker = worker
         // todo... nodejs and browser workers
-        this.worker = new Worker(url)
+
         // this.worker.onmessage = (e: MessageEvent<ReplyMessage>) => {
         //     // execute the callback, then delete the listener
         //     const {type, data} = e.data

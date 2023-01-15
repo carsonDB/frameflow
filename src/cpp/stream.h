@@ -1,7 +1,7 @@
 #ifndef STREAM_H
 #define STREAM_H
 
-
+// #include <cstdio>
 #include "encode.h"
 #include "utils.h"
 using namespace std;

@@ -1,13 +1,11 @@
 import { v4 as uuid } from 'uuid'
 import { buildGraphConfig, SourceNode, StreamRef, TargetNode } from "./graph"
-import { FFWorker } from "./message"
+import { FFWorker, DataBuffer } from "./message"
+import { isBrowser, isNode } from './utils'
 
 
-// unify browser and nodejs of binary data
-export type DataBuffer = Uint8Array | Buffer
 
-
-export type SourceType = ReadableStream<DataBuffer> | string | Blob | DataBuffer
+export type SourceType = ReadableStream<DataBuffer> | string | URL | Blob | DataBuffer
 export type SourceStream = ReadableStream<DataBuffer> | NodeJS.ReadableStream
 type SourceStreamReader = ReadableStreamDefaultReader<DataBuffer> | NodeJS.ReadableStream
 export async function sourceToStream(src: SourceType): Promise<SourceStream> {
@@ -15,16 +13,25 @@ export async function sourceToStream(src: SourceType): Promise<SourceStream> {
         
     // convert any quanlified src into readableStream<DataBuffer>
     if (typeof src == 'string') {
-        try {
-            // network url (both)
-            const url = new URL(src) // valid url
-            const { body } = await fetch(url)
+        if (isNode) {
+            try {
+                const url = new URL(src) // valid url
+                const { body } = await fetch(url)
+                body && (stream = body)
+            } catch {
+                // check if local file exits
+                const { createReadStream } = require('fs')
+                stream = createReadStream(src) as NodeJS.ReadStream
+            }    
+        }
+        else if (isBrowser) {
+            const { body } = await fetch(src)
             body && (stream = body)
-        } catch {
-            // check if local file exits
-            // isNode && 
-            throw `not implemented yet`
-        }       
+        }
+    }
+    else if (src instanceof URL) {
+        const { body } = await fetch(src)
+        body && (stream = body)
     }
     else if (src instanceof Blob) {
         stream = src.stream()
@@ -32,7 +39,7 @@ export async function sourceToStream(src: SourceType): Promise<SourceStream> {
     else if (src instanceof ReadableStream) {
         stream = src
     }
-    else if (src instanceof ArrayBuffer || src instanceof Buffer) {
+    else if (src instanceof ArrayBuffer || (isNode && src instanceof Buffer)) {
         stream = new ReadableStream({ 
             start(s) { 
                 s.enqueue(src) 
@@ -41,7 +48,7 @@ export async function sourceToStream(src: SourceType): Promise<SourceStream> {
         })
     }
 
-    if (!stream) throw `cannot read source: ${src}, type: ${typeof src}`
+    if (!stream) throw `cannot read source: "${src}", type: "${typeof src}, as stream input."`
     return stream
 }
 

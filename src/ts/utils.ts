@@ -1,12 +1,15 @@
 export const isBrowser =
-  typeof window !== "undefined" && typeof window.document !== "undefined";
+    typeof window !== "undefined" && typeof window.document !== "undefined";
 
 export const isNode =
-  typeof process !== "undefined" &&
-  process.versions != null &&
-  process.versions.node != null;
+    typeof process !== "undefined" &&
+    process.versions != null &&
+    process.versions.node != null;
 
 export const isWebWorker =
-  typeof self === "object" &&
-  self.constructor &&
-  self.constructor.name === "DedicatedWorkerGlobalScope";
+    typeof self === "object" &&
+    self.constructor &&
+    self.constructor.name === "DedicatedWorkerGlobalScope";
+
+// export const ENV = isBrowser 
+
