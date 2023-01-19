@@ -10,8 +10,8 @@ Encoder::Encoder(StreamInfo info) {
     // todo... remove
     // if (codec->id == AV_CODEC_ID_H264)
     //     av_opt_set(codec_ctx->priv_data, "preset", "slow", 0);
-
-    CHECK(avcodec_open2(codec_ctx, codec, NULL), "could not open codec");
+    auto ret = avcodec_open2(codec_ctx, codec, NULL);
+    CHECK(ret == 0, "could not open codec");
 }
 
 

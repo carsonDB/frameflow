@@ -47,6 +47,7 @@ src/wasm
 node_modules/
 jspm_packages/
 FFmpeg/
+emsdk/
 
 # TypeScript v1 declaration files
 typings/

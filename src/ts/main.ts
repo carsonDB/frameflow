@@ -4,36 +4,27 @@
 import { v4 as uuid } from 'uuid'
 
 import { applyMulitpleFilter, applySingleFilter, Filter, FilterArgs } from "./filters"
-import { FormatMetadata, SourceNode, StreamMetadata, StreamRef } from "./graph"
-import { FFWorker, DataBuffer } from "./message"
-import { createTargetNode, ExportArgs, Exporter, Reader, sourceToStream, SourceType } from "./streamIO"
+import { FFWorker } from "./message"
+import { createTargetNode, ExportArgs, Exporter, Reader } from "./streamIO"
+import { FormatMetadata, SourceNode, SourceType, StreamMetadata, StreamRef } from "./types/graph"
+import { isBrowser } from './utils'
 
 
 
 // Warning: webpack 5 only support pattern: new Worker(new URL('', import.meta.url))
 const createWorker = () => new Worker(new URL('./transcoder.worker.ts', import.meta.url))
 
-const probeSize = 1024*1024 * 1
+// const probeSize = 1024*1024 * 1
 async function createSource(src: SourceType, options?: {probeSize?: number}) {
-    // convert all src to stream
-    const sourceStream = await sourceToStream(src)
-    const reader = new Reader(sourceStream, options ?? {})
-    // get probe data from stream
-    let toProbeSize = options?.probeSize ?? probeSize
-    const inputs: DataBuffer[] = []
-    while (!reader.end && toProbeSize > 0) {
-        const data = await reader.probe()
-        if (!data) continue
-        inputs.push(data)
-        toProbeSize -= data.byteLength
-    }
+    const id = uuid() // temporarily node id for getMetadata
     // start a worker to probe data
-    const worker = new FFWorker(createWorker())    
-    const metadata = await worker.send('getMetadata', {inputs})
-    const srcTracks = new SourceTrackGroup(metadata.streams, metadata.container)
+    const worker = new FFWorker(createWorker())
+    // convert all src to stream
+    const reader = new Reader(id, src, worker)
+    const metadata = await worker.send('getMetadata', {id, fullSize: reader.fullSize, url: reader.url})
+    const srcTracks = new SourceTrackGroup(src, metadata.streams, metadata.container, reader.fullSize)
     // ready to end
     worker.close()
-    reader.cacheFor(srcTracks.node)
 
     return srcTracks
 }
@@ -65,6 +56,7 @@ class TrackGroup {
     setVolume(args: FilterArgs<'setVolume'>) { 
         return new FilterTrackGroup({ type: 'setVolume', args}, this.streams) 
     }
+    setFormat(args: FilterArgs<'format'>) { return new FilterTrackGroup({ type: 'format', args }, this.streams) }
 
     // export media in stream
     async export(args: ExportArgs) {
@@ -77,12 +69,18 @@ class TrackGroup {
     /**
      * @param filename target filename (currently only in Node.js)
      */
-    async exportTo(url: string, args?: ExportArgs) {
-        const exporter = await this.export({...args, url})
-        const { createWriteStream } = require('fs')
-        const writer = createWriteStream(url) as NodeJS.WriteStream
-        await exporter.forEach(async data => { writer.write(data) })
-        writer.end()
+    async exportTo(dest: string | HTMLVideoElement, args?: ExportArgs) {
+        if (isBrowser && dest instanceof HTMLVideoElement) throw `not implemented yet`
+        else if (typeof dest == 'string') {
+            const url = dest
+            if (isBrowser) throw `not implemented yet`
+            const exporter = await this.export({...args, url})
+            const { createWriteStream } = require('fs')
+            const writer = createWriteStream(url) as NodeJS.WriteStream
+            await exporter.forEach(async data => { writer.write(data) })
+            writer.end()
+        }
+        else throw `not support export destination: "${dest}"`
     }
 }
 
@@ -98,9 +96,9 @@ class Track extends TrackGroup {
 
 export class SourceTrackGroup extends TrackGroup {
     node: SourceNode
-    constructor(streams: StreamMetadata[], format: FormatMetadata) {
-        const node: SourceNode = { type:'source', outStreams: streams, id: uuid(),
-            format: { type: 'file', container: format } }
+    constructor(source: SourceType, streams: StreamMetadata[], format: FormatMetadata, fileSize: number) {
+        const node: SourceNode = { type:'source', outStreams: streams, source,
+            format: { type: 'file', container: format, fileSize} }
         super(streams.map((s, i) => ({from: node, index: i}) ))
         this.node = node
     }

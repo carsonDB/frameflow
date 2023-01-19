@@ -18,6 +18,11 @@ void InOut::addEntry(std::string name, AVFilterContext* filter_ctx, int pad_idx)
 }
 
 
+/**
+ * inParams: map<id, buffersrc args>
+ * outParams: map<id, buffersink args>
+ * mediaTypes: map<id, buffersrc/buffersink type=audio/video>
+ */
 Filterer::Filterer(
     map<string, string> inParams, 
     map<string, string> outParams, 
@@ -44,10 +49,12 @@ Filterer::Filterer(
         buffersrc_ctx_map[id] = buffersink_ctx;
     }
     // create graph and valid
-    auto outs = outputs.av_filterInOut();
     auto ins = inputs.av_filterInOut();
-    avfilter_graph_parse_ptr(graph, filterSpec.c_str(), &outs, &ins, NULL);
-    avfilter_graph_config(graph, NULL);
+    auto outs = outputs.av_filterInOut();
+    auto ret = avfilter_graph_parse_ptr(graph, filterSpec.c_str(), &ins, &outs, NULL);
+    CHECK(ret >= 0, "cannot parse filter graph");
+    ret = avfilter_graph_config(graph, NULL);
+    CHECK(ret >= 0, "cannot configure graph");
 }
 
 /** 
@@ -75,6 +82,8 @@ map<string, Frame> Filterer::filter(map<string, Frame> frames) {
     // delete input frames
     for (auto f : frames)
         delete &f;
+
+    // todo... filter output
 }
     
 

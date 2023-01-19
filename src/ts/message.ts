@@ -1,41 +1,28 @@
 // import { Worker } from 'worker_threads'
 
-import { FormatMetadata, GraphConfig, StreamMetadata } from "./graph"
+import { InferredFormatInfo } from "./types/ffmpeg"
+import { FormatMetadata, GraphConfig, StreamMetadata } from "./types/graph"
 
 
-// type MessageType = SendMessage['type']
-// type SendMessage =
-//     { type: 'getMetadata', data: { inputs: DataBuffer[], module: FFmpegModule } } | // todo...send/reply
-//     { type: 'buildGraph', data: { graphConfig: GraphConfig, module: FFmpegModule } } |
-//     { type: 'nextFrame', data: { inputs: {[nodeId in string]?: DataBuffer }, inputEnd: string[] } } |
-//     { type: 'deleteGraph', data: undefined }
-
-// type ReplyMessage = 
-//     { type: 'getMetadata', data: { container: FormatMetadata, streams: StreamMetadata[] } } |
-//     { type: 'buildGraph', data: undefined } |
-//     { type: 'nextFrame', data: { 
-//         outputs: {[nodeId in string]?: DataBuffer[]}, needInputs: string[], endWriting: boolean} 
-//     } |
-//     { type: 'deleteGraph', data: undefined }
 export type DataBuffer = Uint8Array | Buffer
 
 type MessageType = keyof Messages
 interface Messages {
     getMetadata: {
-        send: { inputs: DataBuffer[] },
+        send: { id: string, fullSize: number, url: string },
         reply: { container: FormatMetadata, streams: StreamMetadata[] }
     }
     inferFormatInfo: {
         send: { format: string, url: string }
-        reply: { format: string, videoCodec: string, audioCodec: string }
+        reply: InferredFormatInfo
     }
     buildGraph: {
         send: { graphConfig: GraphConfig }
         reply: void
     }
     nextFrame: {
-        send: { inputs: {[nodeId in string]?: DataBuffer }, inputEnd: string[] },
-        reply: { outputs: {[nodeId in string]?: DataBuffer[]}, needInputs: string[], endWriting: boolean}
+        send: undefined,
+        reply: { outputs: {[nodeId in string]?: DataBuffer[]}, endWriting: boolean}
     }
     deleteGraph: {
         send: undefined
@@ -43,43 +30,92 @@ interface Messages {
     }
 }
 
+type BackMessageType = keyof BackMessages
+interface BackMessages {
+    read: {
+        send: undefined
+        reply: { inputs: DataBuffer[] }
+    }
+    seek: {
+        send: { pos: number }
+        reply: void
+    }
+}
+
+type AllMessageType = keyof AllMessages
+type AllPostMessage = {type: AllMessageType, data: any, id: string}
+interface AllMessages extends Messages, BackMessages {}
+type AllReplyCallback<T extends MessageType | BackMessageType> = (t: AllMessages[T]['send'], transferArr: DataBuffer['buffer'][]) => 
+    AllMessages[T]['reply'] | Promise<AllMessages[T]['reply']>
+
+
+function sendMessage<T extends AllMessageType>(
+    sender: any, 
+    sendMsg: T, 
+    data: AllMessages[T]['send'],
+    transferArray?: ArrayBuffer[],
+    id=''
+) {
+    const promise = new Promise<AllMessages[T]['reply']>((resolve, reject) => {
+        const listener = (e: MessageEvent<{type: T, data: AllMessages[T]['reply'], id: string}>) => {
+            const {type: replyMsg, data, id: replyId } = e.data
+            if (sendMsg != replyMsg || id != replyId) return // ignore the different msgType / id
+            // execute the callback, then delete the listener
+            resolve(data)
+            // delete event listener
+            sender.removeEventListener('message', listener)
+        }
+        sender.addEventListener('message', listener)
+        sender.addEventListener('messageerror', function errorListener() { 
+            reject()
+            sender.removeEventListener('messageerror', errorListener)
+        })
+    })
+    const msg: AllPostMessage = {type: sendMsg, data, id} // make sure id cannot missing
+    sender.postMessage(msg, transferArray ?? [])
+    return promise
+}
+
+function replyMessage<T extends AllMessageType>(
+    replier: any,
+    msgType: T, 
+    callback: AllReplyCallback<T>,
+    id=''
+) { 
+    replier.addEventListener('message', (e: MessageEvent<{type: T, data: AllMessages[T]['send'], id: string}>) => {
+        const { type, data, id: sendId } = e.data
+        if (msgType != type || id != sendId) return; // ignore different sendMsg / id
+        const transferArr: DataBuffer['buffer'][] = []
+        const replyData = callback(data, transferArr)
+        if (replyData instanceof Promise) {
+            replyData.then(data => {
+                const msg: AllPostMessage = {type, data, id} // make sure id cannot missing
+                replier.postMessage(msg)
+            })
+        }
+        else {
+            const msg: AllPostMessage = {type, data: replyData, id} // make sure id cannot missing
+            replier.postMessage(msg, [...transferArr])
+        }
+        // dont delete callback, since it register once, always listen to main thread
+    })
+}
+
 
 export class FFWorker {
     worker: Worker
-    // #listeners: { [k in string]?: (replyData: ReplyMessage['data']) => void } = {}
     
     constructor(worker: Worker) {
         this.worker = worker
         // todo... nodejs and browser workers
-
-        // this.worker.onmessage = (e: MessageEvent<ReplyMessage>) => {
-        //     // execute the callback, then delete the listener
-        //     const {type, data} = e.data
-        //     this.#listeners[type]?.(data)
-        //     delete this.#listeners['type']
-        // }
     }
     
-    send<T extends MessageType>(sendMsg: T, data: Messages[T]['send'], transferArray?: ArrayBuffer[]) {
-        const promise = new Promise<Messages[T]['reply']>((resolve, reject) => {
-            // this.#listeners[type] = (replyData: ReplyData<T>) => { resolve(replyData) }
-            const worker = this.worker
-            const listener = (e: MessageEvent<{type: T, data: Messages[T]['reply']}>) => {
-                const {type: replyMsg, data} = e.data
-                if (sendMsg != replyMsg) return // ignore the different msg
-                // execute the callback, then delete the listener
-                resolve(data) // todo... replace any
-                // delete event listener
-                worker.removeEventListener('message', listener)
-            }
-            this.worker.addEventListener('message', listener)
-            this.worker.addEventListener('messageerror', function errorListener() { 
-                reject()
-                worker.removeEventListener('messageerror', errorListener)
-            })
-        })
-        this.worker.postMessage({type: sendMsg, data}, transferArray ?? [])
-        return promise
+    send<T extends MessageType>(sendMsg: T, data: Messages[T]['send'], transferArray?: ArrayBuffer[], id?: string) {
+        return sendMessage(this.worker, sendMsg, data, transferArray, id)
+    }
+
+    reply<T extends BackMessageType>(msgType: T, callback: AllReplyCallback<T>, id?: string) {
+        return replyMessage(this.worker, msgType, callback, id)
     }
 
     close() { this.worker.terminate() }
@@ -89,34 +125,14 @@ export class FFWorker {
 /**
  * 
 */
-type ReplyCallback<T extends MessageType> = (t: Messages[T]['send'], transferArr: DataBuffer['buffer'][]) => 
-    Messages[T]['reply'] | Promise<Messages[T]['reply']>
 export class WorkerHandlers {
-    // #listeners: {[T in string]?: (t: SendMessage['data'], transferArr: DataBuffer['buffer'][]) => ReplyMessage['data']} = {}
-    
-    // constructor() {
-        // self.onmessage  = (e: MessageEvent<SendMessage>) => {
-            //     // execute the callback, then delete the listener
-            //     const { type, data } = e.data
-            //     const transferArr: DataBuffer['buffer'][] = []
-        //     const replyData = this.#listeners[type]?.(data, transferArr)
-        //     const postMessage = self.postMessage as (message: any, transfer?: Transferable[]) => void
-        //     postMessage({ type, replyData }, [...transferArr])
-        // }
-        // }
         
-    reply<T extends MessageType>(msgType: T, callback: ReplyCallback<T>) { 
-        self.addEventListener('message', (e: MessageEvent<{type: T, data: Messages[T]['send']}>) => {
-            const { type, data } = e.data
-            if (msgType != type) return // ignore different msg
-            const transferArr: DataBuffer['buffer'][] = []
-            const replyData = callback(data, transferArr)
-            const postMessage = self.postMessage as (message: any, transfer?: Transferable[]) => void
-            if (replyData instanceof Promise) replyData.then(data => postMessage({ type, data }))
-            else postMessage({ type, data: replyData }, [...transferArr])
-            // dont delete callback, since it register once, always listen to main thread
-        })
-        // this.#listeners[msgType] = callback
+    reply<T extends MessageType>(msgType: T, callback: AllReplyCallback<T>, id?: string) { 
+        return replyMessage(self, msgType, callback, id)
+    }
+
+    send<T extends BackMessageType>(msgType: T, data: BackMessages[T]['send'], transferArray?: ArrayBuffer[], id?: string) {
+        return sendMessage(self, msgType, data, transferArray, id)
     }
 }
 

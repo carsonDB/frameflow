@@ -11,7 +11,7 @@ source $EMSDK_ROOT/emsdk_env.sh
 emcc -v
 
 
-NAME="ffmpeg"
+NAME="ffmpeg_built"
 WASM_DIR="./src/wasm"
 
 # build ffmpeg.wasm (FFmpeg library + src/cpp/*)
@@ -26,21 +26,19 @@ ARGS=(
 
   # all settings can be see at: https://github.com/emscripten-core/emscripten/blob/main/src/settings.js
   -s INITIAL_MEMORY=33554432      # 33554432 bytes = 32 MB
-  -s FETCH # download wasm and cache
   -s MODULARIZE=1
   -s EXPORT_ES6=1
   -s EXPORT_NAME=$NAME
   -s WASM_BIGINT=1 # need platform support JS BigInt
-  # -s ENVIRONMENT='web,worker,node'
-  -s ENVIRONMENT='web,worker'
-  # -s EXPORTED_RUNTIME_METHODS=["FS"]
-
-  # optimization for production phase
-  # -O3
+  -s ENVIRONMENT='web,worker' # node?
+  
+  -s ASYNCIFY # need -O3 when enable asyncify
+  -O3
 )
 
 em++ "${ARGS[@]}"
 
 # copy *.d.ts to enable typescript
-echo "copy $NAME.d.ts to $WASM_DIR/$NAME.d.ts"
-cp src/ts/types/ffmpeg.d.ts $WASM_DIR/$NAME.d.ts
+TYPE_WASM=src/ts/types/ffmpeg.d.ts
+echo "copy $TYPE_WASM to $WASM_DIR/$NAME.d.ts"
+cp $TYPE_WASM $WASM_DIR/$NAME.d.ts

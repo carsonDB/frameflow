@@ -1,103 +1,95 @@
-/**
- * definition of graphs:
- *  UserGraph -> GraphConfig -> GraphRuntime
- */
-
-interface Rational {num: number, den: number}
-/**
- * all kinds of metadata infomation
- */
-
-export interface FormatMetadata {
-    formatName: string
-    duration: number
-    bitRate: number
-}
-
-interface CommonStreamMetadata {
-    index: number,
-    timeBase: Rational
-    startTime: number,
-    duration: number,
-    bitRate: number,
-    codecName: string,
-}
-
-export interface VideoStreamMetadata extends CommonStreamMetadata {
-    mediaType: 'video'
-    height: number,
-    width: number,
-    pixelFormat: string
-    frameRate: Rational
-    sampleAspectRatio: Rational
-}
-
-export interface AudioStreamMetadata extends CommonStreamMetadata {
-    mediaType: 'audio'
-    volume: number
-    sampleFormat: string
-    sampleRate: number
-    channels: number
-    channelLayout: string
-}
-
-export type StreamMetadata = AudioStreamMetadata | VideoStreamMetadata
-
-
-/**
- * user defined graph
- */
-// type UserGraphNode = SourceNode | FilterNode | TargetNode
-export interface StreamRef { from: SourceNode | FilterNode, index: number }
-
-export interface SourceNode {
-    type: 'source', id: string, outStreams: StreamMetadata[],
-    format: { type: 'file', container: FormatMetadata } | 
-            { type: 'stream', elementType: 'image' | 'chunk' }
-}
-
-export interface FilterNode {
-    type: 'filter', id: string, inStreams: StreamRef[], outStreams: StreamMetadata[], 
-    filter: { name: string, args: {[k in string]: string | number} }
-}
-
-export interface TargetNode {
-    type: 'target', id: string, inStreams: StreamRef[], outStreams: StreamMetadata[], 
-    format: { type: 'image' | 'video', container: FormatMetadata }
-}
-
-/**
- * graph config for execution
- */
-export interface GraphConfig {
-    sources: SourceNode[]
-    filterConfig?: {
-        inputs: StreamRef[],
-        outputs: StreamRef[]
-        filters: FilterNode[],
-    }
-    target: TargetNode
-}
+import { v4 as uuid } from 'uuid'
+import { applySingleFilter } from './filters'
+import { GraphConfig, StreamRef, TargetNode, UserNode } from './types/graph'
 
 /**
  * given endpoints, backtrace until sources.
+ * - make up some filterNodes (e.g. resample)
+ * - tree shake and optimize the graph (todo...)
+ * - convert to graphConfig (easy for further work)
  */
-export function buildGraphConfig(target: TargetNode): GraphConfig {
-    const sources: SourceNode[] = []
+export function buildGraphConfig(target: TargetNode): [GraphConfig, Map<UserNode, string>] {
+    // make up graph
+    target = completeGraph(target)
+
+    // add uuid for each UserNode, and build map<UserNode, id>
+    const node2id = new Map<UserNode, string>()
+    node2id.set(target, uuid())
+    const traversalGraph = (streamRefs: StreamRef[]) => streamRefs.forEach(({from}) => {
+        if (!node2id.has(from)) node2id.set(from, uuid())
+        if (from.type != 'source')
+            traversalGraph(from.inStreams)
+    })
+    traversalGraph(target.inStreams)
+
+    // convert to graphConfig
+    const sources: string[] = []
+    const targets: string[] = []
+    const configNodes: GraphConfig['nodes'] = {}
     const filterConfig: GraphConfig['filterConfig'] = {
         inputs: [],
         outputs: [],
         filters: [],
     }
-    const traversal = (streamRefs: StreamRef[]) => streamRefs.forEach(({from}) => {
-        if (from.type == 'source') sources.push(from)
-        else if (from.type == 'filter') {
-            filterConfig.filters.push(from)
-            from.inStreams.forEach(ref => ref.from.type == 'source' && filterConfig.inputs.push(ref))
-            traversal(from.inStreams)
+    node2id.forEach((id, node) => {
+        if (node.type == 'source') {
+            sources.push(id)
+            const {source: _, ...rest} = node
+            configNodes[id] = {...rest, id}
         }
-    })
-    target.inStreams.forEach(ref => ref.from.type == 'filter' && filterConfig.outputs.push(ref))
+        else if (node.type == 'filter') {
+            filterConfig.filters.push(id)
+            const inStreams = node.inStreams.map(({from, index}) => {
+                const configRef = {from: node2id.get(from) ?? '', index}
+                if (from.type == 'source')
+                    filterConfig.inputs.push(configRef)
+                return configRef
+            })
+            configNodes[id] = {...node, inStreams, id}
+        }
+        else {
+            targets.push(id)
+            const inStreams = node.inStreams.map(({from, index}) => {
+                const configRef = {from: node2id.get(from) ?? '', index}
+                if (from.type == 'filter') 
+                    filterConfig.outputs.push(configRef)
+                return configRef
+            })
+            configNodes[id] = {...node, inStreams, id}
+        }
 
-    return {sources, filterConfig: (filterConfig.filters.length > 0 ? filterConfig: undefined), target}
+    })
+
+    const graphConfig = {
+        nodes: configNodes,
+        sources, 
+        filterConfig: (filterConfig.filters.length > 0 ? filterConfig: undefined), 
+        targets
+    }
+    
+    return [graphConfig, node2id]
+}
+
+
+function completeGraph(target: TargetNode): TargetNode {
+    // check target inStream / outStream, see if need to add filterNode (format)
+    const inStreams = target.inStreams.map((inRef, i) => {
+        const outS = target.outStreams[i]
+        const inS = inRef.from.outStreams[inRef.index]
+
+        if (inS.mediaType == 'video' && outS.mediaType == 'video') {
+            if (inS.pixelFormat != outS.pixelFormat)
+                return applySingleFilter([inRef], {type: 'format', args: {pixelFormat: outS.pixelFormat}})[0]
+        }
+        else if (inS.mediaType == 'audio' && outS.mediaType == 'audio') {
+            const keys = ['sampleFormat', 'sampleRate', 'channelLayout'] as const
+            if (keys.some(k => inS[k] != outS[k])) {
+                const { channelLayout, sampleFormat, sampleRate } = outS
+                return applySingleFilter([inRef], {type: 'format', args: {channelLayout, sampleFormat, sampleRate }})[0]
+            }
+        }
+        return inRef
+    })
+
+    return {...target, inStreams}
 }

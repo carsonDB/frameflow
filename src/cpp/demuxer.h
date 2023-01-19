@@ -1,10 +1,9 @@
 #ifndef DEMUXER_H
 #define DEMUXER_H
 
-// #include <cstdio>
-#include <emscripten/val.h>
+#include <cstdio>
 #include <string>
-#include <vector>
+#include <emscripten/val.h>
 extern "C" {
     #include <libavformat/avformat.h>
 }
@@ -13,42 +12,69 @@ extern "C" {
 #include "utils.h"
 #include "stream.h"
 #include "packet.h"
-using namespace std;
+using namespace emscripten;
 
 
 // Custom reading avio https://www.codeproject.com/Tips/489450/Creating-Custom-FFmpeg-IO-Context
 static int read_packet(void *opaque, uint8_t *buf, int buf_size)
 {
-    auto onRead = (emscripten::val *)opaque;
-    auto data = emscripten::val(emscripten::typed_memory_view(buf_size, buf));
-    buf_size = (*onRead)(data).as<int>();
+    auto reader = *reinterpret_cast<val*>(opaque);
+    auto data = val(typed_memory_view(buf_size, buf));
+    auto read_size = reader.call<val>("read", data).await().as<int>();
 
-    if (!buf_size)
+    if (!read_size)
         return AVERROR_EOF;
 
-    return buf_size;
+    return read_size;
+}
+
+/* enable asyncify will disable bigInt, so be careful that binding int64_t not allowed */
+static int64_t seek_func(void* opaque, int64_t pos, int whence) {
+    auto reader = *reinterpret_cast<val*>(opaque);
+    auto size = reader["size"].as<int>();
+    switch (whence) {
+        case AVSEEK_SIZE:
+            return size;
+        case SEEK_SET:
+            if (pos >= size) return AVERROR_EOF;
+            reader.call<val>("seek", (int)pos).await(); break;
+        case SEEK_CUR:
+            pos += reader["current"].as<int>();
+            if (pos >= size) return AVERROR_EOF;
+            reader.call<val>("seek", (int)pos).await(); break;
+        case SEEK_END:
+            if (pos >= size) return AVERROR_EOF;
+            pos = size - pos;
+            reader.call<val>("seek", (int)pos).await(); break;
+        default:
+            CHECK(false, "cannot process seek_func");
+    }
+    
+    return pos;
 }
 
 
 class Demuxer {
     AVFormatContext* format_ctx;
-    // vector<Stream> streams;
-    uint8_t* buffer;
     AVIOContext* io_ctx;
     int buf_size = 32*1024;
 public:
-    Demuxer(emscripten::val onRead) {
+    Demuxer() {
         format_ctx = avformat_alloc_context();
-        buffer = (uint8_t*)av_malloc(buf_size);
-        io_ctx = avio_alloc_context(buffer, buf_size, 0, &onRead, &read_packet, NULL, NULL);
+    }
+    void build(val reader) {
+        auto buffer = (uint8_t*)av_malloc(buf_size);
+        auto readerPtr = reinterpret_cast<void*>(&reader);
+        if (reader["size"].as<int>() <= 0)
+            io_ctx = avio_alloc_context(buffer, buf_size, 0, readerPtr, &read_packet, NULL, NULL);
+        else
+            io_ctx = avio_alloc_context(buffer, buf_size, 0, readerPtr, &read_packet, NULL, &seek_func);
         format_ctx->pb = io_ctx;
-        auto ret = avformat_open_input(&format_ctx, NULL, NULL, NULL);
+        // open and get metadata
+        auto ret = avformat_open_input(&format_ctx, reader["url"].as<std::string>().c_str(), NULL, NULL);
         CHECK(ret == 0, "Could not open input file.");
         ret = avformat_find_stream_info(format_ctx, NULL);
         CHECK(ret >= 0, "Could not open find stream info.");
-        // for (int i = 0; i < format_ctx->nb_streams; i++) {
-        //     streams.push_back(Stream(format_ctx, format_ctx->streams[i]));
-        // }
     }
     ~Demuxer() { 
         avformat_close_input(&format_ctx);
@@ -64,12 +90,14 @@ public:
         auto ret = av_read_frame(format_ctx, pkt->av_packet());
         return *pkt;
     }
-    FormatInfo getMetadata() { return createFormatInfo(format_ctx); }
+    FormatInfo getMetadata() { 
+        return createFormatInfo(format_ctx); 
+    }
 
 // only for c++    
     AVFormatContext* av_format_context() { return format_ctx; }
     AVStream* av_stream(int i) { 
-        CHECK(i < 0 || i >= format_ctx->nb_streams, "get av stream i error");
+        CHECK(i >= 0 && i < format_ctx->nb_streams, "get av stream i error");
         return format_ctx->streams[i]; 
     }
 };

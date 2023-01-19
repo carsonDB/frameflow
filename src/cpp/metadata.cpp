@@ -10,7 +10,7 @@ StreamInfo createStreamInfo(AVStream* s) {
     info.bit_rate = par->bit_rate;
     info.start_time = s->start_time;
     info.duration = s->duration;
-    info.codec_name = avcodec_descriptor_get(par->codec_id)->name;
+    info.codec_name = avcodec_find_decoder(par->codec_id)->name;
     if (par->codec_type == AVMEDIA_TYPE_VIDEO) {
         info.codec_type = "video";
         info.width = par->width;

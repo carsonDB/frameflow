@@ -43,8 +43,9 @@ EMSCRIPTEN_BINDINGS(metadata) {
 EMSCRIPTEN_BINDINGS(demuxer) {
 
     class_<Demuxer>("Demuxer")
-        .constructor<emscripten::val>()
-        // .property("streams", &Demuxer::getStreams)
+        // .constructor<emscripten::val>()
+        .constructor<>()
+        .function("build", &Demuxer::build)
         .function("seek", &Demuxer::seek)
         .function("read", &Demuxer::read)
         .function("getMetadata", &Demuxer::getMetadata)
@@ -115,8 +116,13 @@ EMSCRIPTEN_BINDINGS(muxer) {
 
     value_object<InferredFormatInfo>("InferredFormatInfo")
         .field("format", &InferredFormatInfo::format)
-        .field("videoCodec", &InferredFormatInfo::videoCodec)
-        .field("audioCodec", &InferredFormatInfo::audioCodec)
+        .field("video", &InferredFormatInfo::video)
+        .field("audio", &InferredFormatInfo::audio)
+    ;
+
+    value_object<InferredStreamInfo>("InferredStreamInfo")
+        .field("codecName", &InferredStreamInfo::codec_name)
+        .field("format", &InferredStreamInfo::format)
     ;
 }
 

@@ -13,21 +13,34 @@ source $EMSDK_ROOT/emsdk_env.sh
 
 # configure FFmpeg with Emscripten
 CFLAGS="" #"-s USE_PTHREADS"
-# CFLAGS="$CFLAGS -O3"
 LDFLAGS="$CFLAGS -s INITIAL_MEMORY=33554432" # 33554432 bytes = 32 MB
 CONFIG_ARGS=(
   --target-os=none        # use none to prevent any os specific configurations
   --arch=x86_32           # use x86_32 to achieve minimal architectural optimization
   --enable-cross-compile  # enable cross compile
-  --disable-x86asm        # disable x86 asm
-  --disable-inline-asm    # disable inline asm
+  --disable-asm           # disable asm optimization
   --disable-stripping     # disable stripping
+  # GPL
+  # --enable-gpl
+  # --enable-version3
+  # selected codecs
+
+  --disable-ffmpeg
   --disable-programs
   --disable-avdevice
+  --disable-bsfs
   --disable-ffplay
   --disable-ffprobe
+  # --disable-postproc ??
+  # --disable-debug ??
   --disable-network
+  
+  # selected protocols
+  --disable-protocols
+  --enable-protocol=file
+  
   --disable-sdl2
+  --disable-hwaccels
   --disable-doc
   --extra-cflags="$CFLAGS"
   --extra-cxxflags="$CFLAGS"

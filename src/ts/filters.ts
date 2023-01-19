@@ -1,5 +1,4 @@
-import { v4 as uuid } from 'uuid';
-import { AudioStreamMetadata, FilterNode, StreamRef } from "./graph";
+import { AudioStreamMetadata, FilterNode, StreamMetadata, StreamRef } from "./types/graph";
 
 export type FilterArgs<T extends Filter['type']> = Extract<Filter, { type: T, args: any }>['args']
 export type Filter = 
@@ -8,7 +7,8 @@ export type Filter =
     { type: 'loop', args: number } |
     { type: 'setVolume', args: number } |
     { type: 'merge' } | // implicit args: {number of inputs}
-    { type: 'concat' }
+    { type: 'concat' } |
+    { type: 'format', args: { pixelFormat?: string, sampleFormat?: string, sampleRate?: number, channelLayout?: string } }
 
 
 /**
@@ -27,9 +27,9 @@ export function applyMulitpleFilter(streamRefsArr: StreamRef[][], filter: Filter
             if (streamRefsArr.some(refs => refs.length != streamRefsArr[0].length))
                 throw `${filter.type}: all segments should have same audio/video tracks`
             const duration = streamRefsArr.reduce((acc, refs) => acc + refs[0].from.outStreams[refs[0].index].duration, 0)
-            const from: FilterNode = {type: 'filter', inStreams: streamRefsArr.flat(), id: uuid(),
+            const from: FilterNode = {type: 'filter', inStreams: streamRefsArr.flat(),
                 outStreams: streamRefsArr[0].map(r => ({...r.from.outStreams[r.index], duration})), 
-                filter: {name: 'concat', args: {n, v, a}} }
+                filter: {name: 'concat', ffmpegArgs: {n, v, a}} }
             return from.outStreams.map((_, i) => ({from, index: i}))
         };
         case 'merge': {
@@ -44,9 +44,9 @@ export function applyMulitpleFilter(streamRefsArr: StreamRef[][], filter: Filter
             if (inAudioStreams.some(m => m.sampleFormat != inAudioStreams[0].sampleFormat))
                 throw `${filter.type}: all inputs must have same sampleFormat`
             // out stream metadata mainly use first one
-            const from: FilterNode = {type: 'filter', inStreams: audioStreamRefs, id: uuid(), 
+            const from: FilterNode = {type: 'filter', inStreams: audioStreamRefs, 
                 outStreams: [{...inAudioStreams[0], duration}], 
-                filter: {name: 'amerge', args: {inputs: audioStreamRefs.length}}}
+                filter: {name: 'amerge', ffmpegArgs: {inputs: audioStreamRefs.length}}}
             return [...streamRefs.filter(ref => ref.from.outStreams[ref.index].mediaType != 'audio'),
                     {from, index: 0}]
         }
@@ -65,33 +65,49 @@ export function applySingleFilter(streamRefs: StreamRef[], filter: Filter): Stre
         const s = streamRef.from.outStreams[streamRef.index]
         switch (filter.type) {
             case 'trim': {
-                const args = filter.args
+                const {startTime, duration} = filter.args
                 const name = s.mediaType == 'audio' ? 'atrim' : 'trim'
-                if (args.startTime < s.startTime || args.duration > s.duration)
+                if (startTime < s.startTime || duration > s.duration)
                     throw 'trim range (absolute) has exceeded input range'
                 const from: FilterNode = {
-                    type: 'filter', filter: {name, args}, id: uuid(), 
-                    inStreams: [streamRef], outStreams: [{...s, ...args}] }
+                    type: 'filter', filter: {name, ffmpegArgs: {start: startTime, duration}}, 
+                    inStreams: [streamRef], outStreams: [{...s, startTime, duration}] }
                 return {from, index: 0}
             }
             case 'loop': {
-                const args = filter.args
+                const loop = filter.args
                 const name = s.mediaType == 'audio' ? 'aloop' : 'loop'
                 const from: FilterNode = {
-                    type: 'filter', filter: {name, args: {loop: args}}, id: uuid(),
-                    inStreams: [streamRef], outStreams: [{...s, duration: args*s.duration}]
+                    type: 'filter', filter: {name, ffmpegArgs: {loop}},
+                    inStreams: [streamRef], outStreams: [{...s, duration: loop*s.duration}]
                 }
                 return {from, index: 0}
             }
             case 'setVolume': {
-                const args = filter.args
+                const volume = filter.args
                 if (s.mediaType == 'video') return streamRef
                 const from: FilterNode = {
-                    type: 'filter', filter: {name: 'volume', args: {volume: args}}, id: uuid(),
-                    inStreams: [streamRef], outStreams: [{...s, volume: args}]}
+                    type: 'filter', filter: {name: 'volume', ffmpegArgs: {volume}},
+                    inStreams: [streamRef], outStreams: [{...s, volume}]}
                 return {from, index: 0}
             }
-            default: throw `${filter.type}: not found single input filter`
+            case 'format': {
+                const {pixelFormat, channelLayout, sampleFormat, sampleRate} = filter.args
+                const name = s.mediaType == 'audio' ? 'aformat' : 'format'
+                const ffmpegArgs = s.mediaType == 'audio' ? 
+                    {sample_fmts: sampleFormat, channel_layouts: channelLayout, sample_rates: sampleRate} :
+                    {pix_fmts: pixelFormat}
+                const metadata: StreamMetadata = s.mediaType == 'audio' ? 
+                    {...s, sampleFormat: sampleFormat ?? s.sampleFormat, 
+                        channelLayout: channelLayout ?? s.channelLayout,
+                        sampleRate: sampleRate ?? s.sampleRate} :
+                    {...s, pixelFormat: pixelFormat ?? s.pixelFormat}
+                const from: FilterNode = {
+                    type: 'filter', filter: {name, ffmpegArgs},
+                    inStreams: [streamRef], outStreams: [metadata] }
+                return {from, index: 0}
+            }
+            default: throw `${filter.type}: not support single input filter`
         }
     })
 

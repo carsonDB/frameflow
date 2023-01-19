@@ -14,7 +14,7 @@ const basicConfig = {
     },
 
     resolve: {
-        extensions: ['.ts', '...'],
+        extensions: ['.ts', '.d.ts', '...'],
         fallback: { events: false, fs: false, module: false, url: false, crypto: false, path: false }
     },
 
@@ -41,7 +41,8 @@ const devConfig = {
         })
     ],
     devServer: {
-        static: path.join(__dirname, "dist"),
+        // static: path.join(__dirname, "dist"),
+        static: path.join(__dirname, "examples"),
     },
     devtool: 'eval-cheap-module-source-map',
 }

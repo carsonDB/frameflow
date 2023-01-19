@@ -19,11 +19,18 @@ interface StdMap<T1, T2> {
     set(key: T1, val: T2)
 }
 
-
-
 // demuxer
+interface ReaderForDemuxer {
+    size: number
+    current: number
+    url: string
+    read: (buffer: Uint8Array) => Promise<number>
+    seek: (pos: number) => Promise<void>
+}
 class Demuxer {
-    constructor(onRead: (buffer: Uint8Array) => number)
+    // constructor(reader: ReaderForDemuxer)
+    constructor()
+    build(reader: ReaderForDemuxer): Promise<void>
     // streams: StdVector<Frame>
     seek(t: number, streamIndex: number): void
     read(): Packet
@@ -101,10 +108,22 @@ class Encoder {
     delete(): void
 }
 
+// inferred info
+interface InferredStreamInfo {
+    codecName: string
+    format: string // pix_format / sample_format
+}
+
+interface InferredFormatInfo {
+    format: string,
+    video: InferredStreamInfo
+    audio: InferredStreamInfo
+}
+
 // muxer
 class Muxer {
     constructor(formatName: string, onWrite: (data: Uint8Array) => void)
-    static inferFormatInfo(format: string, filename: string): {format: string, videoCodec: string, audioCodec}
+    static inferFormatInfo(format: string, filename: string): InferredFormatInfo
     newStream(encoder: Encoder): void
     openIO(): void
     writeHeader(): void

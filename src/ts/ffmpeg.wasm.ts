@@ -2,10 +2,10 @@
  * FFmpeg Module manager
  * Note: this file import from built wasm files, which should be built beforehand.
  */
-import createModule, { FFmpegModule } from '../wasm/ffmpeg.js'
-import wasmFile from '../wasm/ffmpeg.wasm'
+import createModule, { FFmpegModule } from '../wasm/ffmpeg_built.js'
+import wasmFile from '../wasm/ffmpeg_built.wasm'
 
-export { StdVector, StdMap, AVRational, StreamInfo, FormatInfo, ModuleType, FFmpegModule } from '../wasm/ffmpeg.js'
+export { StdVector, StdMap, AVRational, StreamInfo, FormatInfo, ModuleType, FFmpegModule } from '../wasm/ffmpeg_built'
 
 
 // store global instance of Module here

@@ -54,12 +54,13 @@ todo...
 
 ```
 ./build_ffmpeg.sh
-./build.sh
+./build_wasm.sh
 ```
-Reference: [Build FFmpeg WebAssembly version (= ffmpeg.wasm): Part.2 Compile with Emscripten](https://jeromewu.github.io/build-ffmpeg-webassembly-version-part-2-compile-with-emscripten/)
-
 
 ### Emscripten
+```
+git clone https://github.com/emscripten-core/emsdk.git
+```
 [Install Emscripten SDK](https://emscripten.org/docs/getting_started/downloads.html#installation-instructions-using-the-emsdk-recommended)
 
 ### FFmpeg version (n5.0 release)

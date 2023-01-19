@@ -17,10 +17,16 @@ extern "C" {
 using namespace std;
 
 
+struct InferredStreamInfo {
+    string codec_name;
+    // AVRational time_base;
+    string format;
+};
+
 struct InferredFormatInfo {
     string format;
-    string videoCodec;
-    string audioCodec;
+    InferredStreamInfo video;
+    InferredStreamInfo audio;
 };
 
 
@@ -61,10 +67,21 @@ public:
 
     static InferredFormatInfo inferFormatInfo(string format_name, string filename) {
         auto format = av_guess_format(format_name.c_str(), filename.c_str(), NULL);
+        auto video_codec = avcodec_find_encoder(format->video_codec);
+        auto audio_codec = avcodec_find_encoder(format->audio_codec);
+        InferredStreamInfo videoInfo = {
+            .codec_name = video_codec->name,
+            .format = av_get_pix_fmt_name(*video_codec->pix_fmts),
+        };
+        InferredStreamInfo audioInfo = {
+            .codec_name = audio_codec->name,
+            .format = av_get_sample_fmt_name(*audio_codec->sample_fmts)
+        };
+
         return { 
-            format->name, 
-            avcodec_find_encoder(format->video_codec)->name, 
-            avcodec_find_encoder(format->audio_codec)->name };
+            .format = format->name, 
+            .video = videoInfo,
+            .audio = audioInfo };
     }
     
     void newStream(Encoder& encoder) {
@@ -74,10 +91,6 @@ public:
 
         streams.push_back(Stream(format_ctx, encoder));
     }
-
-    // void addStream(Stream& stream) {
-    //     streams.push_back(Stream(format_ctx, stream)); 
-    // }
 
     void openIO() { avio_open(&format_ctx->pb, NULL, AVIO_FLAG_WRITE); }
     void writeHeader() { 

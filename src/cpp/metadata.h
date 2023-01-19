@@ -1,7 +1,7 @@
 #ifndef METADATA_H
 #define METADATA_H
 
-// #include <cstdio>
+#include <cstdio>
 #include <string>
 #include <vector>
 
@@ -17,9 +17,14 @@ using namespace std;
 struct StreamInfo {
     int index;
     AVRational time_base;
-    int64_t bit_rate;
-    int64_t start_time;
-    int64_t duration;
+    
+    // int64_t bit_rate;
+    // int64_t start_time;
+    // int64_t duration;
+    int bit_rate;
+    int start_time;
+    int duration;
+    
     string codec_type;
     string codec_name;
     string format;
@@ -42,8 +47,10 @@ void set_avcodec_context_from_streamInfo(StreamInfo& info, AVCodecContext* ctx);
 
 struct FormatInfo {
     std::string format_name;
-    int64_t bit_rate;
-    int64_t duration;
+    // int64_t bit_rate;
+    // int64_t duration;
+    int bit_rate;
+    int duration;
     vector<StreamInfo> streamInfos;
 };
 

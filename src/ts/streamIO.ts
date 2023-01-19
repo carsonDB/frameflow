@@ -1,67 +1,115 @@
-import { v4 as uuid } from 'uuid'
-import { buildGraphConfig, SourceNode, StreamRef, TargetNode } from "./graph"
-import { FFWorker, DataBuffer } from "./message"
+import { buildGraphConfig } from './graph'
+import { DataBuffer, FFWorker } from "./message"
+import { SourceNode, SourceType, StreamRef, TargetNode } from "./types/graph"
 import { isBrowser, isNode } from './utils'
 
 
-
-export type SourceType = ReadableStream<DataBuffer> | string | URL | Blob | DataBuffer
 export type SourceStream = ReadableStream<DataBuffer> | NodeJS.ReadableStream
 type SourceStreamReader = ReadableStreamDefaultReader<DataBuffer> | NodeJS.ReadableStream
-export async function sourceToStream(src: SourceType): Promise<SourceStream> {
-    let stream: SourceStream | undefined = undefined
-        
-    // convert any quanlified src into readableStream<DataBuffer>
+type SourceStreamCreator = (seekPos: number) => Promise<{stream: SourceStream, size: number, url?: string}>
+
+async function fetchSource(url: string | URL, startPos: number): Promise<{stream: SourceStream, size: number, url: string}> {
+    // todo... seekPos
+    const { body, headers } = await fetch(url)
+    const urlStr = typeof url == 'string' ? url : url.href
+    if (!body) throw `cannot fetch source url: ${url}`
+    return { stream: body, size: parseInt(headers.get('content-length') ?? '0'), url: urlStr }
+}
+
+const sourceToStreamCreator = (src: SourceType): SourceStreamCreator => async (seekPos: number) => {
+    // convert any quanlified src into creator of readableStream<DataBuffer>
     if (typeof src == 'string') {
         if (isNode) {
             try {
                 const url = new URL(src) // valid url
-                const { body } = await fetch(url)
-                body && (stream = body)
+                return await fetchSource(url, seekPos)
             } catch {
                 // check if local file exits
-                const { createReadStream } = require('fs')
-                stream = createReadStream(src) as NodeJS.ReadStream
+                const { createReadStream, stats } = require('fs').promises
+                return {
+                    url: src,
+                    stream: createReadStream(src) as NodeJS.ReadStream, 
+                    size: (await stats(src)).size 
+                }
             }    
         }
         else if (isBrowser) {
-            const { body } = await fetch(src)
-            body && (stream = body)
+            return await fetchSource(src, seekPos)
         }
     }
     else if (src instanceof URL) {
-        const { body } = await fetch(src)
-        body && (stream = body)
+        return await fetchSource(src, seekPos)
     }
     else if (src instanceof Blob) {
-        stream = src.stream()
+        const url = src instanceof File ? src.name : ''
+        return { stream: src.slice(seekPos).stream(), size: src.size, url }
     }
-    else if (src instanceof ReadableStream) {
-        stream = src
+    else if (src instanceof ReadableStream) { // ignore seekPos
+        return { stream: src, size: 0}
     }
     else if (src instanceof ArrayBuffer || (isNode && src instanceof Buffer)) {
-        stream = new ReadableStream({ 
-            start(s) { 
-                s.enqueue(src) 
-                s.close()
-            }
-        })
+        return {
+            stream: new ReadableStream({ 
+                start(s) { 
+                    s.enqueue(new Uint8Array(src.slice(seekPos))) 
+                    s.close()
+                }
+            }),
+            size: src.byteLength
+        }
     }
 
-    if (!stream) throw `cannot read source: "${src}", type: "${typeof src}, as stream input."`
-    return stream
+    throw `cannot read source: "${src}", type: "${typeof src}, as stream input."`
 }
 
 
 
 export class Reader {
-    stream: SourceStream
-    reader: SourceStreamReader
-    buffer: DataBuffer[] = []
+    #id: string
+    #url = '' // todo.. send empty name
+    streamCreator: SourceStreamCreator
+    stream: SourceStream | undefined = undefined
+    reader: SourceStreamReader | undefined = undefined
+    fullSize: number = 0
+    worker: FFWorker
+    #dataReady: boolean = false
+    #ondataReady = () => {} // callback when new data available
     end = false
  
-    constructor(stream: SourceStream, options: {}) {
+    constructor(id: string, source: SourceType, worker: FFWorker) {
+        this.#id = id
+        this.worker = worker
+        this.streamCreator = sourceToStreamCreator(source)
+        this.#enableReply()
+    }
+    
+    #enableReply() {
+        
+        this.worker.reply('read', async () => {
+            const data = await this.readFromStream()
+            this.#dataReady = false
+            // call after sended data
+            setTimeout(() => {
+                this.#ondataReady()
+                this.#ondataReady = () => {} // only call once
+            }, 0)
+            this.#dataReady = true
+
+            return {inputs: data ? [data] : []}
+        }, this.#id)
+
+        this.worker.reply('seek', async ({pos}) => { 
+            await this.createStream(pos)
+        }, this.#id)
+    }
+
+    get url() { return this.#url ?? '' }
+    
+    async createStream(seekPos: number) {
+        const {stream, size, url} = await this.streamCreator(seekPos)
+        this.#url = url ?? ""
         this.stream = stream
+        this.fullSize = size
         if ('getReader' in stream)
             this.reader = stream.getReader()
         else {
@@ -69,18 +117,22 @@ export class Reader {
             if (!stream.isPaused()) throw `nodejs stream must be in paused mode`
             stream.on('end', () => this.end = true)
         }
+
+        return {stream: this.stream, reader: this.reader}
     }
 
     /* unify nodejs and browser streams */
     async readFromStream(): Promise<DataBuffer | undefined> {
-        if ('readable' in this.reader) {
-            if (this.reader.readable) {
-                const output = this.reader.read()
+        // create stream and reader for the first time
+        const reader = this.reader ?? (await this.createStream(0)).reader
+        if ('readable' in reader) {
+            if (reader.readable) {
+                const output = reader.read()
                 if (typeof output == 'string') throw `cannot get string from source stream`
                 return output
             }
             else {
-                const stream = this.reader
+                const stream = reader
                 return new Promise((resolve, reject) => {
                     stream.on('readable', () => {
                         const output = stream.read()
@@ -90,34 +142,20 @@ export class Reader {
                 })
             }
         }
-        const {done, value} = await this.reader.read()
+        const {done, value} = await reader.read()
         if (done) this.end = true
 
         return value
     }
-
-    async probe() {
-        const data = await this.readFromStream()
-        data && this.buffer.push(data)
-        return data
-    }
     
-    async read() {
-        if (this.buffer.length > 0) return this.buffer.shift()
-        const data = await this.readFromStream()
-        return data
-    }
-
-    cacheFor(node: SourceNode) { readerRuntime.set(node, this) }
-
-    async cancel() { 
-        if ('cancel' in this.reader)
-            await this.reader.cancel()
+    /* worker has already had data */
+    async dataReady() {
+        if (this.#dataReady) return
+        return new Promise<void>((resolve) => {
+            this.#ondataReady = () => resolve()
+        })
     }
 }
-
-// save SourceNode with their own Reader temporarily
-export const readerRuntime = new WeakMap<SourceNode, Reader>()
 
 
 interface MediaStreamArgs {
@@ -135,7 +173,7 @@ export interface ExportArgs {
 export async function createTargetNode(inStreams: StreamRef[], args: ExportArgs, worker: FFWorker): Promise<TargetNode> {
     // infer container format from url
     if (!args.format && !args.url) throw `must provide format name or url`
-    const {format, videoCodec, audioCodec} = await worker.send('inferFormatInfo', 
+    const {format, video, audio} = await worker.send('inferFormatInfo', 
         { format: args.format ?? '', url: args.url ?? '' })
 
     // format metadata, take first stream as primary stream
@@ -143,12 +181,14 @@ export async function createTargetNode(inStreams: StreamRef[], args: ExportArgs,
     const { duration, bitRate } = keyStream
     const outStreams = inStreams.map(s => {
         const stream = s.from.outStreams[s.index]
-        if (stream.mediaType == 'audio') return {...stream, codecName: audioCodec}
-        else if (stream.mediaType == 'video') return {...stream, codecName: videoCodec}
+        if (stream.mediaType == 'audio') 
+            return {...stream, codecName: audio.codecName, sampleFormat: audio.format}
+        else if (stream.mediaType == 'video') 
+            return {...stream, codecName: video.codecName, pixelFormat: video.format}
         return stream
     })
 
-    return {type: 'target', id: uuid(), inStreams, outStreams,
+    return {type: 'target', inStreams, outStreams,
         format: { type: args.image ? 'image' : 'video', 
             container: {formatName: format, duration, bitRate}}}
 }
@@ -158,9 +198,8 @@ export async function createTargetNode(inStreams: StreamRef[], args: ExportArgs,
  */
 export class Exporter {
     worker: FFWorker
-    sources: {[nodeId in string]?: SourceNode} = {}
+    readers: Reader[] = []
     targetNode: TargetNode
-    lastInputs: {[nodeId: string]: DataBuffer} = {}
     outputs: DataBuffer[] = []
     
     constructor(node: TargetNode, worker: FFWorker) {
@@ -169,34 +208,24 @@ export class Exporter {
     }
 
     async build() { 
-        const graphConfig = buildGraphConfig(this.targetNode)
-        this.sources = Object.fromEntries(graphConfig.sources.map(s => [s.id, s]))
+        const [graphConfig, node2id] = buildGraphConfig(this.targetNode)
+        // create readers from sources
+        for (const [node, id] of node2id) {
+            if (node.type != 'source') continue
+            const reader = new Reader(id, node.source, this.worker)
+            this.readers.push(reader)
+        }
         await this.worker.send('buildGraph', { graphConfig }) 
     }
     
     async next(): Promise<DataBuffer> {
         // direct return if previous having previous outputs
         if (this.outputs.length > 0) return this.outputs.shift() as DataBuffer
-
-        // send `inputEnd` signals
-        const inputEnd = Object.values(this.sources).reduce<string[]>((acc, s) => 
-            s && readerRuntime.get(s)?.end ? [...acc, s.id] : acc, [])
-
-        const {outputs, needInputs, endWriting} = await this.worker.send('nextFrame',
-            { inputs: this.lastInputs, inputEnd }, Object.values(this.lastInputs).map(b => b.buffer))
-        const output = outputs[this.targetNode.id]
-        // prepare for next inputs
-        const promises = needInputs.map(nodeId => {
-            const source = this.sources[nodeId]
-            const reader = source && readerRuntime.get(source)
-            if (!reader) throw `cannot read from source`
-            return reader.read().then(value => {
-                if (!value) return
-                return [nodeId, value] as [string, DataBuffer]
-            })
-        })
-        const inputs = (await Promise.all(promises)).filter(val => !!val) as [string, DataBuffer][]
-        this.lastInputs = Object.fromEntries(inputs)
+        // make sure input reply ready
+        for (const reader of this.readers)
+            await reader.dataReady()
+        const {outputs, endWriting} = await this.worker.send('nextFrame', undefined)
+        const output = Object.values(outputs)[0]
         
         if (endWriting) {
             this.close()

@@ -1,26 +1,39 @@
 <!DOCTYPE html>
 <html>
-  <head>
+
+<head>
     <meta charset="utf-8">
     <title>frameflow dev</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-  </head>
-  <body>
-    <!-- <video id="input-video" controls src="./examples/assets/flame.avi" ></video><br/> -->
-    <video id="output-video" controls></video><br/>
+</head>
+
+<body>
+    <h1>Fetch: local examples/assets/flame.avi</h1>
+    <video id="input-video" controls src="./assets/flame.avi"></video><br />
+    <h1>Upload video</h1>
     <input id="uploader" type="file" />
-    <button id="run" >GO</button>
+    <button id="metadata">Metadata</button>
+    <button id="transcode">Transcode</button>
     <script>
-        async function convert(video) {
-            window.fflow = frameflow
-            const src = await fflow.source(video, {probeSize: 10*1024*1024})
-            console.log(src.metadata)            
-        }
-        
+        window.onload = () => window.fflow = frameflow
         let video = null
         const fileDom = document.getElementById('uploader')
         fileDom.onchange = (e) => video = e.target.files[0]
-        document.getElementById('run').onclick = () => convert(video)
+
+        document.getElementById('metadata').onclick = async () => {
+            const src = await fflow.source(video)
+            console.log('Metadata:', src.metadata)
+        }
+        
+        document.getElementById('transcode').onclick = async () => {
+            const src = await fflow.source(video)
+            // const stream = await src.export({ format: 'mp4' }) // need seekable output
+            const stream = await src.export({ format: 'flv' })
+            stream.forEach((chunk) => {
+                console.log('output chunk:', chunk)
+            })
+        }
     </script>
-  </body>
+</body>
+
 </html>
