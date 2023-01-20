@@ -18,7 +18,9 @@ import fflow from 'frameflow'
 // use web File api to get File handler.
 let source = await fflow.source(fileBlob)
 let stream = await source.trim(1, 10).export()
-stream.forEach(chunk => {/* do something */})
+for await (let chunk of stream) {
+    /* do something */
+}
 ```
 
 ## Complex demo

@@ -218,7 +218,8 @@ export class Exporter {
         await this.worker.send('buildGraph', { graphConfig }) 
     }
     
-    async next(): Promise<DataBuffer> {
+    /* end when return undefined  */
+    async next(): Promise<DataBuffer | undefined> {
         // direct return if previous having previous outputs
         if (this.outputs.length > 0) return this.outputs.shift() as DataBuffer
         // make sure input reply ready
@@ -240,11 +241,15 @@ export class Exporter {
         return firstOne
     }
 
-    async forEach(callback: (data: DataBuffer) => Promise<void>) {
-        while (true) {
-            const output = await this.next()
-            if (!output) break
-            await callback(output)
+    /* for await...of loop */
+    [Symbol.asyncIterator]() {
+        const exporter = this
+        return {
+            async next() {
+                const output = await exporter.next()
+                return {value: output, done: !!output}
+            },
+            async return() { await exporter.close() }
         }
     }
 
