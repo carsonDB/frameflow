@@ -20,10 +20,10 @@ class Encoder {
 public:
     Encoder(StreamInfo info);
     ~Encoder() { avcodec_free_context(&codec_ctx); };
-    vector<Packet> encode(Frame& frame);
-    void flush() { 
-        auto f = Frame(); 
-        encode(f);
+    vector<Packet*> encode(Frame* frame);
+    vector<Packet*> flush() { 
+        auto f = Frame("");
+        return encode(&f);
     }
 // c++ only
     void setFlags(int flag) { codec_ctx->flags |= flag; }

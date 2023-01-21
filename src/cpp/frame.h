@@ -7,29 +7,34 @@ extern "C" {
     #include <libavutil/imgutils.h>
 }
 
+#include "utils.h"
 using namespace emscripten;
 
 
 class Frame {
     AVFrame* av_frame;
     int align = 32;
+    std::string _name; // streamId
 public:
-    // Frame(FrameParams params) {
-    //     av_frame = av_frame_alloc();
-    //     params.fill_context(av_frame);
-    //     av_frame_get_buffer(av_frame, 0);
-    // }
-    // create empty frame
-    Frame() { av_frame = NULL; }
-    ~Frame() { av_frame_free(&av_frame); }
-    // val getImageData(int plane_index) {
-    //     // todo... size of memory: consider `av_image_fill_plane_sizes`
-    //     auto size = av_image_get_buffer_size(
-    //         (AVPixelFormat)av_frame->format, av_frame->width, av_frame->height, align);
-    //     return val(typed_memory_view(size, av_frame->data[plane_index]));
-    // }
+    std::string name() const { return _name; }
 // only for c++
-    Frame(AVFrame* frame) { av_frame = frame; };
+    Frame(std::string name) { 
+        this->_name = name;
+        av_frame = av_frame_alloc(); 
+    }
+    Frame(AVFrame* frame, std::string name) { 
+        av_frame = frame;
+        name = name;
+    };
+    ~Frame() { av_frame_free(&av_frame); }
+    
+    emscripten::val getData(int i) {
+        CHECK(i >= 0 && i < 8, "Frame::getData: plane_index not valid, [0, 8]");
+        return emscripten::val(emscripten::typed_memory_view(
+            av_frame->linesize[i] * av_frame->height, av_frame->data[i]));
+        // todo...get whole buffer
+    }
+
     AVFrame* av_ptr() { return av_frame; };
 };
 

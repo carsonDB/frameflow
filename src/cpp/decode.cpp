@@ -1,7 +1,8 @@
 #include "decode.h"
 
 
-Decoder::Decoder(Demuxer& demuxer, int stream_index) {
+Decoder::Decoder(Demuxer& demuxer, int stream_index, string name) {
+    _name = name;
     auto stream = demuxer.av_stream(stream_index);
     auto codecpar = stream->codecpar;
     auto codec = avcodec_find_decoder(codecpar->codec_id);
@@ -11,7 +12,8 @@ Decoder::Decoder(Demuxer& demuxer, int stream_index) {
     avcodec_open2(codec_ctx, codec, NULL);
 }
 
-Decoder::Decoder(string params) {
+Decoder::Decoder(string params, string name) {
+    _name = name;
     AVDictionary* dict;
     av_dict_parse_string(&dict, params.c_str(), "=", ":", 0);
     auto codec = avcodec_find_decoder_by_name(av_dict_get(dict, "codec_name", NULL, 0)->value);
@@ -21,24 +23,24 @@ Decoder::Decoder(string params) {
     av_dict_free(&dict);
 }
 
-std::vector<Frame> Decoder::decode(Packet& pkt) {
-    int ret = avcodec_send_packet(codec_ctx, pkt.av_packet());
+std::vector<Frame*> Decoder::decode(Packet* pkt) {
+    int ret = avcodec_send_packet(codec_ctx, pkt->av_packet());
     // get all the available frames from the decoder
-    AVFrame* frame = NULL;
-    std::vector<Frame> frames = *(new std::vector<Frame>);
+    std::vector<Frame*> frames;
 
-    while (ret >= 0) {
-        ret = avcodec_receive_frame(codec_ctx, frame);
+    while (1) {
+        auto frame = new Frame(this->name());
+        ret = avcodec_receive_frame(codec_ctx, frame->av_ptr());
         if (ret < 0) {
             // those two return values are special and mean there is no output
             // frame available, but there were no errors during decoding
+            delete frame;
             if (ret == AVERROR_EOF || ret == AVERROR(EAGAIN))
-                continue;
+                break;
+            CHECK(false, "decode frame failed");
         }
-        frames.push_back(*(new Frame(frame)));
+        frames.push_back(frame);
     }
-    // delete packet
-    delete &pkt;
     return frames;
 }
 

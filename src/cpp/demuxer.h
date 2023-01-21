@@ -28,7 +28,10 @@ static int read_packet(void *opaque, uint8_t *buf, int buf_size)
     return read_size;
 }
 
-/* enable asyncify will disable bigInt, so be careful that binding int64_t not allowed */
+/**
+ * Warning: any function involve this call, will give promise (async).
+ * Warning: enable asyncify will disable bigInt, so be careful that binding int64_t not allowed 
+ */
 static int64_t seek_func(void* opaque, int64_t pos, int whence) {
     auto reader = *reinterpret_cast<val*>(opaque);
     auto size = reader["size"].as<int>();
@@ -58,11 +61,14 @@ class Demuxer {
     AVFormatContext* format_ctx;
     AVIOContext* io_ctx;
     int buf_size = 32*1024;
+    std::string _url;
 public:
     Demuxer() {
         format_ctx = avformat_alloc_context();
     }
+    /* async */
     void build(val reader) {
+        _url = reader["url"].as<std::string>();
         auto buffer = (uint8_t*)av_malloc(buf_size);
         auto readerPtr = reinterpret_cast<void*>(&reader);
         if (reader["size"].as<int>() <= 0)
@@ -71,7 +77,7 @@ public:
             io_ctx = avio_alloc_context(buffer, buf_size, 0, readerPtr, &read_packet, NULL, &seek_func);
         format_ctx->pb = io_ctx;
         // open and get metadata
-        auto ret = avformat_open_input(&format_ctx, reader["url"].as<std::string>().c_str(), NULL, NULL);
+        auto ret = avformat_open_input(&format_ctx, _url.c_str(), NULL, NULL);
         CHECK(ret == 0, "Could not open input file.");
         ret = avformat_find_stream_info(format_ctx, NULL);
         CHECK(ret >= 0, "Could not open find stream info.");
@@ -82,14 +88,21 @@ public:
             av_freep(&io_ctx->buffer);
         avio_context_free(&io_ctx);
     }
+    /* async */
     void seek(int64_t timestamp, int stream_index) {
         av_seek_frame(format_ctx, stream_index, timestamp, AVSEEK_FLAG_BACKWARD);
     }
-    Packet read() {
-        Packet* pkt = new Packet();
+    /* async */
+    Packet* read() {
+        auto pkt = new Packet();
         auto ret = av_read_frame(format_ctx, pkt->av_packet());
-        return *pkt;
+        return pkt;
     }
+
+    void dump() {
+        av_dump_format(format_ctx, 0, _url.c_str(), 0);
+    }
+
     FormatInfo getMetadata() { 
         return createFormatInfo(format_ctx); 
     }

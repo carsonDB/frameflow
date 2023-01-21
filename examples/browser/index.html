@@ -29,9 +29,8 @@
             const src = await fflow.source(video)
             // const stream = await src.export({ format: 'mp4' }) // need seekable output
             const stream = await src.export({ format: 'flv' })
-            stream.forEach((chunk) => {
+            for await (let chunk of stream)
                 console.log('output chunk:', chunk)
-            })
         }
     </script>
 </body>

@@ -9,15 +9,15 @@ export type DataBuffer = Uint8Array | Buffer
 type MessageType = keyof Messages
 interface Messages {
     getMetadata: {
-        send: { id: string, fullSize: number, url: string },
+        send: { id: string, fullSize: number, url: string, wasm: ArrayBuffer },
         reply: { container: FormatMetadata, streams: StreamMetadata[] }
     }
     inferFormatInfo: {
-        send: { format: string, url: string }
+        send: { format: string, url: string, wasm: ArrayBuffer }
         reply: InferredFormatInfo
     }
     buildGraph: {
-        send: { graphConfig: GraphConfig }
+        send: { graphConfig: GraphConfig, wasm: ArrayBuffer }
         reply: void
     }
     nextFrame: {

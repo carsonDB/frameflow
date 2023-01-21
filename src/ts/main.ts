@@ -4,6 +4,7 @@
 import { v4 as uuid } from 'uuid'
 
 import { applyMulitpleFilter, applySingleFilter, Filter, FilterArgs } from "./filters"
+import { loadWASM } from './loader'
 import { FFWorker } from "./message"
 import { createTargetNode, ExportArgs, Exporter, Reader } from "./streamIO"
 import { FormatMetadata, SourceNode, SourceType, StreamMetadata, StreamRef } from "./types/graph"
@@ -14,14 +15,14 @@ import { isBrowser } from './utils'
 // Warning: webpack 5 only support pattern: new Worker(new URL('', import.meta.url))
 const createWorker = () => new Worker(new URL('./transcoder.worker.ts', import.meta.url))
 
-// const probeSize = 1024*1024 * 1
-async function createSource(src: SourceType, options?: {probeSize?: number}) {
+async function createSource(src: SourceType, options?: {}) {
     const id = uuid() // temporarily node id for getMetadata
     // start a worker to probe data
     const worker = new FFWorker(createWorker())
     // convert all src to stream
     const reader = new Reader(id, src, worker)
-    const metadata = await worker.send('getMetadata', {id, fullSize: reader.fullSize, url: reader.url})
+    const wasm = await loadWASM()
+    const metadata = await worker.send('getMetadata', {id, fullSize: reader.fullSize, url: reader.url, wasm})
     const srcTracks = new SourceTrackGroup(src, metadata.streams, metadata.container, reader.fullSize)
     // ready to end
     worker.close()
@@ -77,7 +78,9 @@ class TrackGroup {
             const exporter = await this.export({...args, url})
             const { createWriteStream } = require('fs')
             const writer = createWriteStream(url) as NodeJS.WriteStream
-            await exporter.forEach(async data => { writer.write(data) })
+            for await (const data of exporter) {
+                writer.write(data)
+            }
             writer.end()
         }
         else throw `not support export destination: "${dest}"`

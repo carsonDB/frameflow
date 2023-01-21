@@ -52,7 +52,7 @@ public:
      * @param filterSpec 
      */
     Filterer(map<string, string> inParams, map<string, string> outParams, map<string, string> mediaTypes, string filterSpec);
-    map<string, Frame> filter(map<string, Frame>);
+    vector<Frame*> filter(vector<Frame*>);
 };
 
 

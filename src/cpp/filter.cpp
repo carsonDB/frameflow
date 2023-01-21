@@ -32,6 +32,7 @@ Filterer::Filterer(
     AVFilterGraph* graph = filterGraph.av_FilterGraph();
     // create input nodes
     for (auto const& [id, params] : inParams) {
+        CHECK(id.length() > 0, "Filterer: buffersrc id should not be empty");
         AVFilterContext *buffersrc_ctx;
         const AVFilter *buffersrc = avfilter_get_by_name(mediaTypes[id] == "video" ? "buffer" : "abuffer");
         avfilter_graph_create_filter(&buffersrc_ctx, buffersrc, id.c_str(), params.c_str(), NULL, graph);
@@ -40,6 +41,7 @@ Filterer::Filterer(
     }
     // create end nodes
     for (auto const& [id, params] : outParams) {
+        CHECK(id.length() > 0, "Filterer: buffersink id should not be empty");
         AVFilterContext *buffersink_ctx;
         const AVFilter *buffersink = avfilter_get_by_name(mediaTypes[id] == "video" ? "buffersink" : "abuffersink");
         avfilter_graph_create_filter(&buffersink_ctx, buffersink, id.c_str(), NULL, NULL, graph);
@@ -59,31 +61,34 @@ Filterer::Filterer(
 
 /** 
  * process once
+ * In/Out frames should all have non-empty Frame::name.
  */
-map<string, Frame> Filterer::filter(map<string, Frame> frames) {
-    /* push the frames into the filtergraph */
-    for (auto const& [id, ctx] : buffersrc_ctx_map) {
-        if (frames.count(id) == 0) continue;
-        auto ret = av_buffersrc_add_frame_flags(ctx, frames[id].av_ptr(), AV_BUFFERSRC_FLAG_KEEP_REF);
+vector<Frame*> Filterer::filter(vector<Frame*> frames) {
+    std::vector<Frame*> out_frames;
+    AVFrame* avframe = NULL;
+    
+    // At each time, send a frame, and pull frames as much as possible.
+    for (auto const& frame : frames) {
+        // feed to graph
+        const auto& id = frame->name();
+        if (buffersrc_ctx_map.count(id) == 0) continue;
+        auto ctx = buffersrc_ctx_map[id];
+        auto ret = av_buffersrc_add_frame_flags(ctx, frame->av_ptr(), AV_BUFFERSRC_FLAG_KEEP_REF);
         CHECK(ret >= 0, "Error while feeding the audio filtergraph");
-    }
-    /* pull filtered frames from the filtergraph */
-    std::vector<Frame> out_frames;
-    AVFrame* out_frame;
-    while (1) {
+        // pull filtered frames from each entry of filtergraph outputs
         for (auto const& [id, ctx] : buffersink_ctx_map) {
-            auto ret = av_buffersink_get_frame(ctx, out_frame);
-            if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
-                break;
-            CHECK(ret >= 0, "error get filtered frames from buffersink");
-            out_frames.push_back(Frame(out_frame));
+            while (1) {
+                auto ret = av_buffersink_get_frame(ctx, avframe);
+                if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+                    break;
+                CHECK(ret >= 0, "error get filtered frames from buffersink");
+                auto out_frame = new Frame(avframe, id);
+                out_frames.push_back(out_frame);
+            }
         }
     }
-    // delete input frames
-    for (auto f : frames)
-        delete &f;
 
-    // todo... filter output
+    return out_frames;
 }
     
 

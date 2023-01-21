@@ -44,6 +44,7 @@ let stream = await output.export({image: 'bmp'})
 setInterval(() => {
     let image = await stream.next()
 }, 1000/30) // render at 30 fps.
+stream.close()
 
 ```
 

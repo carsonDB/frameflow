@@ -11,13 +11,14 @@ class Packet {
     AVPacket* packet;
 public:
     Packet() { packet = av_packet_alloc(); }
+    Packet(AVPacket* pkt) { packet = pkt; }
     Packet(int bufSize, int64_t pts) {
         packet = av_packet_alloc();
         av_new_packet(packet, bufSize);
         packet->pts = pts;
     }
     ~Packet() { av_packet_free(&packet); };
-    bool isEmpty() const { return packet->data == NULL; }
+    int size() const { return packet->size; }
     int stream_index() const { return packet->stream_index; }
     void set_stream_index(int index) { packet->stream_index = index; }
     emscripten::val getData() { 

@@ -1,6 +1,7 @@
 import { buildGraphConfig } from './graph'
+import { loadWASM } from './loader'
 import { DataBuffer, FFWorker } from "./message"
-import { SourceNode, SourceType, StreamRef, TargetNode } from "./types/graph"
+import { SourceType, StreamRef, TargetNode } from "./types/graph"
 import { isBrowser, isNode } from './utils'
 
 
@@ -171,10 +172,12 @@ export interface ExportArgs {
 }
 
 export async function createTargetNode(inStreams: StreamRef[], args: ExportArgs, worker: FFWorker): Promise<TargetNode> {
+    const wasm = await loadWASM()
     // infer container format from url
     if (!args.format && !args.url) throw `must provide format name or url`
+    // todo... infer too slow ??
     const {format, video, audio} = await worker.send('inferFormatInfo', 
-        { format: args.format ?? '', url: args.url ?? '' })
+        { format: args.format ?? '', url: args.url ?? '', wasm })
 
     // format metadata, take first stream as primary stream
     const keyStream = inStreams[0].from.outStreams[inStreams[0].index]
@@ -215,7 +218,8 @@ export class Exporter {
             const reader = new Reader(id, node.source, this.worker)
             this.readers.push(reader)
         }
-        await this.worker.send('buildGraph', { graphConfig }) 
+        const wasm = await loadWASM()
+        await this.worker.send('buildGraph', { graphConfig, wasm }) 
     }
     
     /* end when return undefined  */
@@ -247,9 +251,12 @@ export class Exporter {
         return {
             async next() {
                 const output = await exporter.next()
-                return {value: output, done: !!output}
+                return {value: output ?? new Uint8Array(), done: !!output}
             },
-            async return() { await exporter.close() }
+            async return() { 
+                await exporter.close() 
+                return { value: new Uint8Array(), done: true }
+            }
         }
     }
 

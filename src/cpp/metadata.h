@@ -20,10 +20,9 @@ struct StreamInfo {
     
     // int64_t bit_rate;
     // int64_t start_time;
-    // int64_t duration;
     int bit_rate;
-    int start_time;
-    int duration;
+    double start_time;
+    double duration;
     
     string codec_type;
     string codec_name;
@@ -48,9 +47,8 @@ void set_avcodec_context_from_streamInfo(StreamInfo& info, AVCodecContext* ctx);
 struct FormatInfo {
     std::string format_name;
     // int64_t bit_rate;
-    // int64_t duration;
     int bit_rate;
-    int duration;
+    double duration;
     vector<StreamInfo> streamInfos;
 };
 

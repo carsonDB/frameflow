@@ -8,8 +8,8 @@ StreamInfo createStreamInfo(AVStream* s) {
     auto par = s->codecpar;
     info.time_base = s->time_base;
     info.bit_rate = par->bit_rate;
-    info.start_time = s->start_time;
-    info.duration = s->duration;
+    info.start_time = s->start_time * (double)s->time_base.num / s->time_base.den;
+    info.duration = s->duration * (double)s->time_base.num / s->time_base.den;
     info.codec_name = avcodec_find_decoder(par->codec_id)->name;
     if (par->codec_type == AVMEDIA_TYPE_VIDEO) {
         info.codec_type = "video";
@@ -59,7 +59,7 @@ FormatInfo createFormatInfo(AVFormatContext* p) {
     FormatInfo info;
     info.format_name = p->iformat->name;
     info.bit_rate = p->bit_rate;
-    info.duration = p->duration;
+    info.duration = p->duration / (double)AV_TIME_BASE;
     for (int i = 0; i < p->nb_streams; i++) {
         auto codec_type = p->streams[i]->codecpar->codec_type;
         if (codec_type == AVMEDIA_TYPE_VIDEO || codec_type == AVMEDIA_TYPE_AUDIO)

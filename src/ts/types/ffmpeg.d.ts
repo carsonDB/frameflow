@@ -28,13 +28,12 @@ interface ReaderForDemuxer {
     seek: (pos: number) => Promise<void>
 }
 class Demuxer {
-    // constructor(reader: ReaderForDemuxer)
     constructor()
     build(reader: ReaderForDemuxer): Promise<void>
-    // streams: StdVector<Frame>
-    seek(t: number, streamIndex: number): void
-    read(): Packet
+    seek(t: number, streamIndex: number): Promise<void>
+    read(): Promise<Packet>
     getMetadata(): FormatInfo
+    dump(): void
     delete(): void
 }
 interface FormatInfo {
@@ -46,9 +45,10 @@ interface FormatInfo {
 
 // decode
 class Decoder {
-    constructor(dexmuer: Demuxer, streamIndex: number)
-    constructor(params: string)
+    constructor(dexmuer: Demuxer, streamIndex: number, name: string)
+    constructor(params: string, name: string)
     decode(packet: Packet): StdVector<Frame>
+    name: number
     flush(): StdVector<Frame>
     delete(): void
 }
@@ -79,8 +79,9 @@ interface StreamInfo {
 
 // packet
 class Packet {
+    constructor()
     constructor(bufSize: number, pts: number)
-    isEmpty: boolean
+    size: number
     get streamIndex(): number
     set streamIndex(index: number)
     getData(): Uint8Array
@@ -89,14 +90,15 @@ class Packet {
 
 // frame
 class Frame {
-    imageData(plane_index: number): Frame
+    getData(plane_index: number): Uint8Array
     delete(): void
+    name: string
 }
 
 // filter
 class Filterer {
     constructor(inStreams: StdMap<string, string>, outStreams: StdMap<string, string>, mediaTypes: StdMap<string, string>, graphSpec: string)
-    filter(frames: StdMap<string, Frame>): StdMap<string, Frame>
+    filter(frames: StdVector<Frame>): StdVector<Frame>
     delete(): void
 }
 
@@ -124,6 +126,7 @@ interface InferredFormatInfo {
 class Muxer {
     constructor(formatName: string, onWrite: (data: Uint8Array) => void)
     static inferFormatInfo(format: string, filename: string): InferredFormatInfo
+    dump(): void
     newStream(encoder: Encoder): void
     openIO(): void
     writeHeader(): void
@@ -145,7 +148,7 @@ interface ModuleClass {
 type ModuleInstance = {[k in keyof ModuleClass]: InstanceType<ModuleClass[k]>}
 
 interface ModuleFunction {
-    createFrameMap(): StdMap<string, Frame>
+    createFrameVector(): StdVector<Frame>
     createStringStringMap(): StdMap<string, string>
 }
 

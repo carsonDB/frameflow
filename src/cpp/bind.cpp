@@ -47,29 +47,28 @@ EMSCRIPTEN_BINDINGS(demuxer) {
         .constructor<>()
         .function("build", &Demuxer::build)
         .function("seek", &Demuxer::seek)
-        .function("read", &Demuxer::read)
+        .function("read", &Demuxer::read, allow_raw_pointers())
+        .function("dump", &Demuxer::dump)
         .function("getMetadata", &Demuxer::getMetadata)
     ;
 }
 
 EMSCRIPTEN_BINDINGS(decode) {
     class_<Decoder>("Decoder")
-        .constructor<std::string>()
-        .constructor<Demuxer&, int>()
-        .function("decode", &Decoder::decode)
-        .function("flush", &Decoder::flush)
-        ;
+        .constructor<Demuxer&, int, std::string>()
+        .constructor<std::string, std::string>()
+        .property("name", &Decoder::name)
+        .function("decode", &Decoder::decode, allow_raw_pointers())
+        .function("flush", &Decoder::flush, allow_raw_pointers())
+    ;
 
-}
-
-EMSCRIPTEN_BINDINGS(stream) {
-    
 }
 
 EMSCRIPTEN_BINDINGS(packet) {
     class_<Packet>("Packet")
+        .constructor<>()
         .constructor<int, int64_t>()
-        .property("isEmpty", &Packet::isEmpty)
+        .property("size", &Packet::size)
         .property("streamIndex", &Packet::stream_index, &Packet::set_stream_index)
         .function("getData", &Packet::getData)
     ;
@@ -78,14 +77,15 @@ EMSCRIPTEN_BINDINGS(packet) {
 EMSCRIPTEN_BINDINGS(frame) {
     class_<Frame>("Frame")
         // .constructor<FrameParams>()
-        // .function("imageData", &Frame::getImageData)
+        .property("name", &Frame::name)
+        .function("getData", &Frame::getData)
     ;
 }
 
 EMSCRIPTEN_BINDINGS(filter) {
     class_<Filterer>("Filterer")
         .constructor<std::map<std::string, std::string>, std::map<std::string, std::string>, std::map<std::string, std::string>, std::string>()
-        .function("filter", &Filterer::filter)
+        .function("filter", &Filterer::filter, allow_raw_pointers())
     ;
     
 }
@@ -98,8 +98,8 @@ EMSCRIPTEN_BINDINGS(encode) {
     
     class_<Encoder>("Encoder")
         .constructor<StreamInfo>()
-        .function("encode", &Encoder::encode)
-        .function("flush", &Encoder::flush)
+        .function("encode", &Encoder::encode, allow_raw_pointers())
+        .function("flush", &Encoder::flush, allow_raw_pointers())
     ;
 }
 
@@ -107,6 +107,7 @@ EMSCRIPTEN_BINDINGS(muxer) {
     class_<Muxer>("Muxer")
         .constructor<std::string, emscripten::val>()
         .class_function("inferFormatInfo", &Muxer::inferFormatInfo)
+        .function("dump", &Muxer::dump)
         .function("openIO", &Muxer::openIO)
         .function("newStream", &Muxer::newStream)
         .function("writeHeader", &Muxer::writeHeader)
@@ -127,11 +128,11 @@ EMSCRIPTEN_BINDINGS(muxer) {
 }
 
 EMSCRIPTEN_BINDINGS(utils) {
-    emscripten::function("createFrameMap", &createMap<std::string, Frame>);
+    emscripten::function("createFrameVector", &createVector<Frame*>);
     emscripten::function("createStringStringMap", &createMap<std::string, std::string>);
 
-	register_vector<Frame>("vector<Frame>");
-	register_vector<Packet>("vector<Packet>");
+	register_vector<Frame*>("vector<Frame>");
+	register_vector<Packet*>("vector<Packet>");
 	register_vector<StreamInfo>("vector<StreamInfo>");
     register_map<std::string, std::string>("MapStringString");
 }

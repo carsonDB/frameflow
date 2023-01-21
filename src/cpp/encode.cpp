@@ -18,16 +18,17 @@ Encoder::Encoder(StreamInfo info) {
 /**
  * refer: doc/examples/encode_video.c
  */
-vector<Packet> Encoder::encode(Frame& frame) {
-    auto ret = avcodec_send_frame(codec_ctx, frame.av_ptr());
+vector<Packet*> Encoder::encode(Frame* frame) {
+    auto ret = avcodec_send_frame(codec_ctx, frame->av_ptr());
     CHECK(ret >= 0, "Error sending a frame for encoding");
-    vector<Packet> packets;
+    AVPacket* pkt = NULL;
+    vector<Packet*> packets;
     while (ret >= 0) {
-        ret = avcodec_receive_packet(codec_ctx, packet.av_packet());
+        ret = avcodec_receive_packet(codec_ctx, pkt);
         if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
             return packets;
         CHECK(ret >= 0, "Error during encoding");
-        packets.push_back(packet);
+        packets.push_back(new Packet(pkt));
     }
     return packets;
 }
