@@ -1,10 +1,9 @@
 // import { Worker } from 'worker_threads'
 
 import { InferredFormatInfo } from "./types/ffmpeg"
-import { FormatMetadata, GraphConfig, StreamMetadata } from "./types/graph"
+import { DataBuffer, FormatMetadata, GraphConfig, StreamMetadata, WriteDataBuffer } from "./types/graph"
 
 
-export type DataBuffer = Uint8Array | Buffer
 
 type MessageType = keyof Messages
 interface Messages {
@@ -22,7 +21,7 @@ interface Messages {
     }
     nextFrame: {
         send: undefined,
-        reply: { outputs: {[nodeId in string]?: DataBuffer[]}, endWriting: boolean}
+        reply: { outputs: {[nodeId in string]?: WriteDataBuffer[]}, endWriting: boolean}
     }
     deleteGraph: {
         send: undefined

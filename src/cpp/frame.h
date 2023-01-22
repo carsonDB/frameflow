@@ -22,10 +22,6 @@ public:
         this->_name = name;
         av_frame = av_frame_alloc(); 
     }
-    Frame(AVFrame* frame, std::string name) { 
-        av_frame = frame;
-        name = name;
-    };
     ~Frame() { av_frame_free(&av_frame); }
     
     emscripten::val getData(int i) {

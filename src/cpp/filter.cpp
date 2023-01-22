@@ -48,7 +48,7 @@ Filterer::Filterer(
         // todo... may be set out args
         // ret = av_opt_set_int_list(buffersink_ctx, "sample_rates", out_sample_rates, -1, AV_OPT_SEARCH_CHILDREN);
         inputs.addEntry(id.c_str(), buffersink_ctx, 0);
-        buffersrc_ctx_map[id] = buffersink_ctx;
+        buffersink_ctx_map[id] = buffersink_ctx;
     }
     // create graph and valid
     auto ins = inputs.av_filterInOut();
@@ -65,7 +65,6 @@ Filterer::Filterer(
  */
 vector<Frame*> Filterer::filter(vector<Frame*> frames) {
     std::vector<Frame*> out_frames;
-    AVFrame* avframe = NULL;
     
     // At each time, send a frame, and pull frames as much as possible.
     for (auto const& frame : frames) {
@@ -78,11 +77,13 @@ vector<Frame*> Filterer::filter(vector<Frame*> frames) {
         // pull filtered frames from each entry of filtergraph outputs
         for (auto const& [id, ctx] : buffersink_ctx_map) {
             while (1) {
-                auto ret = av_buffersink_get_frame(ctx, avframe);
-                if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+                auto out_frame = new Frame(id);
+                auto ret = av_buffersink_get_frame(ctx, out_frame->av_ptr());
+                if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+                    delete out_frame;
                     break;
+                }
                 CHECK(ret >= 0, "error get filtered frames from buffersink");
-                auto out_frame = new Frame(avframe, id);
                 out_frames.push_back(out_frame);
             }
         }

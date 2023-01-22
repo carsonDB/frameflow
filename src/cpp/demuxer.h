@@ -32,7 +32,7 @@ static int read_packet(void *opaque, uint8_t *buf, int buf_size)
  * Warning: any function involve this call, will give promise (async).
  * Warning: enable asyncify will disable bigInt, so be careful that binding int64_t not allowed 
  */
-static int64_t seek_func(void* opaque, int64_t pos, int whence) {
+static int64_t seek_for_read(void* opaque, int64_t pos, int whence) {
     auto reader = *reinterpret_cast<val*>(opaque);
     auto size = reader["size"].as<int>();
     switch (whence) {
@@ -50,7 +50,7 @@ static int64_t seek_func(void* opaque, int64_t pos, int whence) {
             pos = size - pos;
             reader.call<val>("seek", (int)pos).await(); break;
         default:
-            CHECK(false, "cannot process seek_func");
+            CHECK(false, "cannot process seek_for_read");
     }
     
     return pos;
@@ -76,7 +76,7 @@ public:
         if (reader["size"].as<int>() <= 0)
             io_ctx = avio_alloc_context(buffer, buf_size, 0, readerPtr, &read_packet, NULL, NULL);
         else
-            io_ctx = avio_alloc_context(buffer, buf_size, 0, readerPtr, &read_packet, NULL, &seek_func);
+            io_ctx = avio_alloc_context(buffer, buf_size, 0, readerPtr, &read_packet, NULL, &seek_for_read);
         format_ctx->pb = io_ctx;
         // open and get metadata
         auto ret = avformat_open_input(&format_ctx, _url.c_str(), NULL, NULL);

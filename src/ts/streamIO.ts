@@ -1,7 +1,7 @@
 import { buildGraphConfig } from './graph'
 import { loadWASM } from './loader'
-import { DataBuffer, FFWorker } from "./message"
-import { SourceType, StreamRef, TargetNode } from "./types/graph"
+import { FFWorker } from "./message"
+import { SourceType, StreamRef, TargetNode, DataBuffer, WriteDataBuffer } from "./types/graph"
 import { isBrowser, isNode } from './utils'
 
 
@@ -203,7 +203,7 @@ export class Exporter {
     worker: FFWorker
     readers: Reader[] = []
     targetNode: TargetNode
-    outputs: DataBuffer[] = []
+    outputs: WriteDataBuffer[] = []
     
     constructor(node: TargetNode, worker: FFWorker) {
         this.targetNode = node
@@ -223,39 +223,39 @@ export class Exporter {
     }
     
     /* end when return undefined  */
-    async next(): Promise<DataBuffer | undefined> {
+    async next(): Promise<WriteDataBuffer | undefined> {
         // direct return if previous having previous outputs
-        if (this.outputs.length > 0) return this.outputs.shift() as DataBuffer
+        if (this.outputs.length > 0) return this.outputs.shift() as WriteDataBuffer
         // make sure input reply ready
         for (const reader of this.readers)
-            await reader.dataReady()
+        await reader.dataReady()
         const {outputs, endWriting} = await this.worker.send('nextFrame', undefined)
         const output = Object.values(outputs)[0]
         
         if (endWriting) {
-            this.close()
+            await this.close()
         }
-
+        
         if (!output || output.length == 0) 
-            return this.next()
+        return this.next()
         // cache from second ones
         const firstOne = output[0]
         this.outputs = output.slice(1)
-
+        
         return firstOne
     }
-
+    
     /* for await...of loop */
     [Symbol.asyncIterator]() {
         const exporter = this
         return {
-            async next() {
+            async next(): Promise<{value: WriteDataBuffer, done: boolean}> {
                 const output = await exporter.next()
-                return {value: output ?? new Uint8Array(), done: !!output}
+                return {value: output ?? {data: new Uint8Array(), offset: 0}, done: !output}
             },
-            async return() { 
+            async return(): Promise<{value: WriteDataBuffer, done: boolean}> { 
                 await exporter.close() 
-                return { value: new Uint8Array(), done: true }
+                return { value: {data: new Uint8Array(), offset: 0}, done: true }
             }
         }
     }

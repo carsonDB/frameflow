@@ -78,8 +78,8 @@ class TrackGroup {
             const exporter = await this.export({...args, url})
             const { createWriteStream } = require('fs')
             const writer = createWriteStream(url) as NodeJS.WriteStream
-            for await (const data of exporter) {
-                writer.write(data)
+            for await (const {data, offset} of exporter) {
+                writer.write(data, ) // todo...
             }
             writer.end()
         }

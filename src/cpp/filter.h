@@ -28,11 +28,9 @@ public:
 class InOut {
     AVFilterInOut *entries = NULL;
 public:
-    ~InOut() { avfilter_inout_free(&entries); }
     AVFilterInOut *av_filterInOut() { return entries; }
     void addEntry(string name, AVFilterContext* filter_ctx, int pad_idx);
 };
-
 
 
 class Filterer {

@@ -1,7 +1,7 @@
 import createModule from '../wasm/ffmpeg_built.js'
-import { DataBuffer, WorkerHandlers } from "./message"
-import { FFmpegModule, ModuleType, StdVector, StreamInfo } from './types/ffmpeg'
-import { GraphConfig, SourceConfig, StreamConfigRef, StreamMetadata, TargetConfig } from "./types/graph"
+import { WorkerHandlers } from "./message"
+import { FFmpegModule, ModuleType, Packet, StdVector, StreamInfo } from './types/ffmpeg'
+import { DataBuffer, GraphConfig, SourceConfig, StreamConfigRef, StreamMetadata, TargetConfig, WriteDataBuffer } from "./types/graph"
 
 
 const streamId = (nodeId: string, streamIndex: number) => `${nodeId}:${streamIndex}`
@@ -50,7 +50,7 @@ let graph: GraphRuntime | null = null
 
 
 // initiantate wasm module
-async function loadModule(wasmBinary: ArrayBuffer) {
+async function loadModule(wasmBinary: ArrayBuffer): Promise<FFmpegModule> {
     return await createModule({
          // Module callback functions: https://emscripten.org/docs/api_reference/module.html
          print: (msg: string) => console.log(msg),
@@ -89,7 +89,7 @@ handler.reply('buildGraph', async ({graphConfig, wasm}) => {
 handler.reply('nextFrame', async (_, transferArr) => {
     if (!graph) throw new Error("haven't built graph.")
     const result = await executeStep(graph)
-    transferArr.push(...Object.values(result.outputs).map(data => data.map(d => d.buffer)).flat())
+    transferArr.push(...Object.values(result.outputs).map(outs => outs.map(({data}) => data.buffer)).flat())
 
     return result
 })
@@ -158,13 +158,12 @@ class InputIO {
 
 class OutputIO {
     #offset = 0
-    buffers: Uint8Array[] = []
+    buffers: WriteDataBuffer[] = []
     
     get offset() { return this.#offset }
 
     write(data: Uint8Array) {
-        console.log('OutputIO write', {data})
-        this.buffers.push(data.slice(0))
+        this.buffers.push({data: data.slice(0), offset: this.#offset})
         this.#offset += data.byteLength
     }
 
@@ -257,12 +256,13 @@ function buildFiltersGraph(graphConfig: FilterGraph, nodes: GraphConfig['nodes']
     }).join(';')
 
     // build filter_grpah given spec
-    const mediaTypes = module.createStringStringMap()
     const src2args = module.createStringStringMap()
     inputs.forEach(ref => 
         src2args.set(streamId(ref.from, ref.index), buffersrcArgs(getStream(ref))))
     const sink2args = module.createStringStringMap()
     outputs.forEach(ref => sink2args.set(streamId(ref.from, ref.index), ''))
+    // both src and sink media type
+    const mediaTypes = module.createStringStringMap()
     inputs.concat(outputs).forEach(ref => 
         mediaTypes.set(streamId(ref.from, ref.index), getStream(ref).mediaType))
     const filterer = new module.Filterer(src2args, sink2args, mediaTypes, filterSpec)
@@ -277,11 +277,9 @@ function buildFiltersGraph(graphConfig: FilterGraph, nodes: GraphConfig['nodes']
  async function executeStep(graph: GraphRuntime) {
     // read frames from sources
     const frames: Frames = {}
-    const needInputs: string[] = []
 
     for (const source of graph.sources) {
         Object.assign(frames, await source.reader.readFrames())
-        if (source.reader.needInputs) needInputs.push(source.config.id)
     }
     const framesEmpty = Object.values(frames).length == 0
     
@@ -294,19 +292,18 @@ function buildFiltersGraph(graphConfig: FilterGraph, nodes: GraphConfig['nodes']
     }
     // signal: no frames to write anymore 
     const endWriting = graph.sources.every(s => s.reader.inputEnd) && framesEmpty
-    // console.log('target write start', frames, endWriting)
+
     // write to destinations
-    const outputs: {[nodeId: string]: Uint8Array[]} = {}
+    const outputs: {[nodeId: string]: WriteDataBuffer[]} = {}
     graph.targets.forEach(target => {
         endWriting ? target.writer.writeEnd() : target.writer.writeFrames(frames)
         outputs[target.config.id] = target.writer.pullOutputs()
     })
-    // console.log('target write end')
-
+    
     // delete frames
     Object.values(frames).forEach(f => f?.delete())
     
-    return {needInputs, outputs, endWriting}
+    return {outputs, endWriting}
 }
 
 /**
@@ -323,7 +320,6 @@ class VideoSourceReader {
     demuxer: ModuleType['Demuxer']
     module: FFmpegModule
     decoders: {[streamIndex in number]?: ModuleType['Decoder']} = {}
-    buffers: DataBuffer[] = []
     #inputIO?: InputIO
     
     constructor(node: SourceConfig, module: FFmpegModule) {
@@ -343,8 +339,6 @@ class VideoSourceReader {
         })
     }
 
-    get needInputs() { return this.buffers.length == 0 }
-    pushInputs(chunk: DataBuffer[]) { this.buffers.push(...chunk) }
     get inputEnd() { return this.#inputIO?.end }
 
     async readFrames(): Promise<Frames> {
@@ -390,9 +384,9 @@ class ImageSourceReader {
         this.Packet = ffmpeg.Packet
     }
 
-    setInputEnd() { this.#inputEnd = true }
-    needInputs() { return this.images.length == 0 }
-    pushInputs(images: DataBuffer[]) { this.images.push(...images) }
+    // setInputEnd() { this.#inputEnd = true }
+    // needInputs() { return this.images.length == 0 }
+    // pushInputs(images: DataBuffer[]) { this.images.push(...images) }
     get inputEnd() { return this.#inputEnd }
 
     readFrames(): Frames {
@@ -482,7 +476,8 @@ class VideoTargetWriter {
 class ImageTargetWriter {
     node: TargetConfig
     encoder: ModuleType['Encoder']
-    outputs: Uint8Array[] = []
+    outputs: WriteDataBuffer[] = []
+    offset = 0
     
     constructor(node: TargetConfig, ffmpeg: FFmpegModule) {
         this.node = node
@@ -491,25 +486,31 @@ class ImageTargetWriter {
         this.encoder = new ffmpeg.Encoder(streamMetadataToInfo(node.outStreams[0]))
     }
 
+    #pktVec2outputs(pktVec: StdVector<Packet>) {
+        vec2Array(pktVec).forEach(pkt => {
+            const data = pkt.getData()
+            this.outputs.push({data, offset: this.offset})
+            this.offset += data.byteLength
+        })
+    }
+
     writeFrames(frames: Frames) {
         // use inStream ref
         const {from, index} = this.node.inStreams[0]
         const frame = frames[streamId(from, index)]
         if (!frame) return
         const pktVec = this.encoder.encode(frame)
-        vec2Array(pktVec).forEach(pkt => this.outputs.push(pkt.getData()))
+        this.#pktVec2outputs(pktVec)
     }
     
     /* flush at end of writing */
     writeEnd() {
         const pktVec = this.encoder.flush()
-        vec2Array(pktVec).forEach(pkt => this.outputs.push(pkt.getData()))
+        this.#pktVec2outputs(pktVec)
     }
 
     pullOutputs() {
-        const outputs = this.outputs
-        this.outputs = []
-        return outputs
+        return this.outputs.splice(0, this.outputs.length)
     }
 
     close() {

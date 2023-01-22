@@ -39,9 +39,20 @@ static int write_packet(void* opaque, uint8_t* buf, int buf_size) {
     
 }
 
-static int64_t seek_func_tmp(void* opaque, int64_t pos, int whence) {
-    CHECK(false, "seek when writting: not implemeneted");
-    return 0;
+static int64_t seek_for_write(void* opaque, int64_t pos, int whence) {
+    auto writer = *reinterpret_cast<val*>(opaque);
+
+    switch (whence) {
+        case SEEK_SET:
+            writer.call<val>("seek", (int)pos); break;
+        case SEEK_CUR:
+            pos += writer["offset"].as<int>();
+            writer.call<val>("seek", (int)pos); break;
+        default:
+            CHECK(false, "cannot process seek_for_read");
+    }
+
+    return pos;
 }
 
 
@@ -58,7 +69,7 @@ public:
         auto writerPtr = reinterpret_cast<void*>(&writer);
         // create buffer for writing
         auto buffer = (uint8_t*)av_malloc(buf_size);
-        io_ctx = avio_alloc_context(buffer, buf_size, 1, writerPtr, NULL, write_packet, seek_func_tmp);
+        io_ctx = avio_alloc_context(buffer, buf_size, 1, writerPtr, NULL, write_packet, seek_for_write);
         avformat_alloc_output_context2(&format_ctx, NULL, format.c_str(), NULL);
         CHECK(format_ctx != NULL, "Could not create output format context");
         format_ctx->pb = io_ctx;
@@ -109,7 +120,10 @@ public:
         auto ret = avformat_write_header(format_ctx, NULL);
         CHECK(ret >= 0, "Error occurred when opening output file");
     }
-    void writeTrailer() { av_write_trailer(format_ctx); }
+    void writeTrailer() { 
+        auto ret = av_write_trailer(format_ctx); 
+        CHECK(ret == 0, "Error when writing trailer");
+    }
     void writeFrame(Packet* packet) {
         auto av_pkt = packet->av_packet();
         auto out_av_stream = streams[av_pkt->stream_index]->av_stream_ptr();

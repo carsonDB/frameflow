@@ -11,7 +11,6 @@ class Packet {
     AVPacket* packet;
 public:
     Packet() { packet = av_packet_alloc(); }
-    Packet(AVPacket* pkt) { packet = pkt; }
     Packet(int bufSize, int64_t pts) {
         packet = av_packet_alloc();
         av_new_packet(packet, bufSize);

@@ -21,10 +21,7 @@ public:
     Encoder(StreamInfo info);
     ~Encoder() { avcodec_free_context(&codec_ctx); };
     vector<Packet*> encode(Frame* frame);
-    vector<Packet*> flush() { 
-        auto f = Frame("");
-        return encode(&f);
-    }
+    vector<Packet*> flush() { return encode(NULL); }
 // c++ only
     void setFlags(int flag) { codec_ctx->flags |= flag; }
     const AVCodecContext* av_codecContext_ptr() { return codec_ctx; }

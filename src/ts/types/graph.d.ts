@@ -5,6 +5,9 @@
 
 import { SourceType } from "../streamIO"
 
+export type DataBuffer = Uint8Array | Buffer
+export interface WriteDataBuffer { data: DataBuffer, offset: number }
+
 interface Rational {num: number, den: number}
 /**
  * all kinds of metadata infomation
