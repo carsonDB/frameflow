@@ -14,7 +14,7 @@ extern "C" {
 
 #include "encode.h"
 #include "utils.h"
-using namespace std;
+using namespace emscripten;
 
 
 struct InferredStreamInfo {
@@ -32,9 +32,9 @@ struct InferredFormatInfo {
 
 // Custom writing avio https://ffmpeg.org/pipermail/ffmpeg-devel/2014-November/165014.html
 static int write_packet(void* opaque, uint8_t* buf, int buf_size) {
-    auto onWrite = (emscripten::val*)opaque;
-    auto data = emscripten::val(emscripten::typed_memory_view(buf_size, buf));
-    (*onWrite)(data);
+    auto writer = *reinterpret_cast<val*>(opaque);
+    auto data = val(typed_memory_view(buf_size, buf));
+    writer.call<void>("write", data);
     return buf_size;
     
 }
@@ -49,18 +49,20 @@ class Muxer {
     AVFormatContext* format_ctx;
     AVIOContext* io_ctx;
     std::vector<Stream*> streams;
-    uint8_t* buffer;
     int buf_size = 32*1024;
+    val writer;
 
 public:
-    Muxer(string format, emscripten::val onWrite) {
+    Muxer(string format, val _writer) {
+        writer = std::move(_writer); // writer will be destroyed at end of this function 
+        auto writerPtr = reinterpret_cast<void*>(&writer);
         // create buffer for writing
-        buffer = (uint8_t*)av_malloc(buf_size);
-        io_ctx = avio_alloc_context(buffer, buf_size, 1, &onWrite, NULL, write_packet, seek_func_tmp);
+        auto buffer = (uint8_t*)av_malloc(buf_size);
+        io_ctx = avio_alloc_context(buffer, buf_size, 1, writerPtr, NULL, write_packet, seek_func_tmp);
         avformat_alloc_output_context2(&format_ctx, NULL, format.c_str(), NULL);
-        CHECK(format_ctx, "Could not create output format context");
+        CHECK(format_ctx != NULL, "Could not create output format context");
         format_ctx->pb = io_ctx;
-        format_ctx->flags = AVFMT_FLAG_CUSTOM_IO;
+        format_ctx->flags |= AVFMT_FLAG_CUSTOM_IO;
     };
     ~Muxer() {
         for (const auto& s : streams)
@@ -95,22 +97,21 @@ public:
         av_dump_format(format_ctx, 0, "", 1);
     }
     
-    void newStream(Encoder& encoder) {
+    void newStream(Encoder* encoder) {
         /* Some formats want stream headers to be separate. */
         if (format_ctx->oformat->flags & AVFMT_GLOBALHEADER)
-            encoder.setFlags(AV_CODEC_FLAG_GLOBAL_HEADER);
+            encoder->setFlags(AV_CODEC_FLAG_GLOBAL_HEADER);
 
         streams.push_back(new Stream(format_ctx, encoder));
     }
 
-    void openIO() { avio_open(&format_ctx->pb, NULL, AVIO_FLAG_WRITE); }
-    void writeHeader() { 
-        auto ret = avformat_write_header(format_ctx, NULL); 
+    void writeHeader() {        
+        auto ret = avformat_write_header(format_ctx, NULL);
         CHECK(ret >= 0, "Error occurred when opening output file");
     }
     void writeTrailer() { av_write_trailer(format_ctx); }
-    void writeFrame(Packet& packet) {
-        auto av_pkt = packet.av_packet();
+    void writeFrame(Packet* packet) {
+        auto av_pkt = packet->av_packet();
         auto out_av_stream = streams[av_pkt->stream_index]->av_stream_ptr();
         /* rescale output packet timestamp values from codec to stream timebase */
         // av_packet_rescale_ts(av_pkt, av_pkt->time_base, out_av_stream->time_base);

@@ -66,7 +66,7 @@ const handler = new WorkerHandlers()
 
  handler.reply('getMetadata', async ({id, fullSize, url, wasm}) => {
     const ffmpeg = await loadModule(wasm)
-    const inputIO = new InputStreamer(id, url, fullSize)
+    const inputIO = new InputIO(id, url, fullSize)
     const demuxer = new ffmpeg.Demuxer()
     await demuxer.build(inputIO)
     const {formatName, duration, bitRate, streamInfos} = demuxer.getMetadata()
@@ -103,11 +103,11 @@ handler.reply('deleteGraph', () => {
 
 
 /* direct connect to main thread, to retrieve input data */
-class InputStreamer {
+class InputIO {
     #id: string
     #fullSize: number
     #url: string
-    #current = 0
+    #offset = 0
     #endOfFile = false
     #buffers: DataBuffer[] = []
     constructor(nodeId: string, url: string, fullSize: number) {
@@ -118,13 +118,13 @@ class InputStreamer {
 
     get url() { return this.#url }
     get size() { return this.#fullSize }
-    get current() { return this.#current }
+    get offset() { return this.#offset }
 
     async read(buff: Uint8Array) {
         // cache empty, read from main thread
         if (this.#buffers.length == 0) {
             // first time seek to start position
-            if (this.#current == 0) {
+            if (this.#offset == 0) {
                 await this.seek(0)
             }
             const {inputs} = await handler.send('read', undefined, undefined, this.#id)
@@ -142,7 +142,7 @@ class InputStreamer {
             return offset + size
         }, 0)
         this.#buffers = remainBuffers
-        this.#current += offset
+        this.#offset += offset
             
         return offset
     }
@@ -153,6 +153,24 @@ class InputStreamer {
     }
 
     get end() { return this.#endOfFile }
+}
+
+
+class OutputIO {
+    #offset = 0
+    buffers: Uint8Array[] = []
+    
+    get offset() { return this.#offset }
+
+    write(data: Uint8Array) {
+        console.log('OutputIO write', {data})
+        this.buffers.push(data.slice(0))
+        this.#offset += data.byteLength
+    }
+
+    seek(pos: number) {
+        this.#offset = pos
+    }
 }
 
 
@@ -295,7 +313,7 @@ function buildFiltersGraph(graphConfig: FilterGraph, nodes: GraphConfig['nodes']
  * pushInputs (nodeId) -> Reader -> frames (streamId) -> Writer -> pullOutputs (nodeId)
  */
 
-type Frames = {[streamId in string]: ModuleType['Frame'] | undefined}
+type Frames = {[streamId in string]?: ModuleType['Frame']}
 export type SourceReader = VideoSourceReader | ImageSourceReader
 export type TargetWriter = VideoTargetWriter | ImageTargetWriter
 
@@ -304,9 +322,9 @@ class VideoSourceReader {
     node: SourceConfig
     demuxer: ModuleType['Demuxer']
     module: FFmpegModule
-    decoders: {[streamIndex in number]: ModuleType['Decoder'] | undefined} = {}
+    decoders: {[streamIndex in number]?: ModuleType['Decoder']} = {}
     buffers: DataBuffer[] = []
-    #inputIO: InputStreamer | undefined = undefined
+    #inputIO?: InputIO
     
     constructor(node: SourceConfig, module: FFmpegModule) {
         this.node = node
@@ -318,7 +336,7 @@ class VideoSourceReader {
     async build() {
         const url = this.node.url ?? ''
         const fileSize = this.node.format.type == 'file' ? this.node.format.fileSize : 0
-        this.#inputIO = new InputStreamer(this.node.id, url, fileSize)
+        this.#inputIO = new InputIO(this.node.id, url, fileSize)
         await this.demuxer.build(this.#inputIO)
         this.node.outStreams.forEach((s, i) => {
             this.decoders[s.index] = new this.module.Decoder(this.demuxer, s.index, streamId(this.node.id, i))
@@ -403,15 +421,13 @@ class VideoTargetWriter {
     encoders: {[streamId: string]: ModuleType['Encoder']} = {}
     targetStreamIndexes: {[streamId: string]: number} = {}
     muxer: ModuleType['Muxer']
-    outputs: Uint8Array[] = []
+    #outputIO: OutputIO
     firstWrite = false
     
     constructor(node: TargetConfig, ffmpeg: FFmpegModule) {
         this.node = node
-        this.muxer = new ffmpeg.Muxer(node.format.container.formatName, data => {
-            // console.log('onWrite', data)
-            this.outputs.push(data.slice(0))
-        })
+        this.#outputIO = new OutputIO()
+        this.muxer = new ffmpeg.Muxer(node.format.container.formatName, this.#outputIO)
         node.outStreams.forEach((s, i) => {
             const encoder = new ffmpeg.Encoder(streamMetadataToInfo(s))
             const {from, index} = node.inStreams[i]
@@ -429,9 +445,7 @@ class VideoTargetWriter {
         // start writing
         if (!this.firstWrite) {
             this.firstWrite = true
-            this.muxer.openIO()
             this.muxer.writeHeader()
-            // console.log('write header done')
         }
         // write frames
         Object.entries(frames).forEach(([streamId, frame]) => {
@@ -440,6 +454,7 @@ class VideoTargetWriter {
             vec2Array(pktVec).forEach(pkt => {
                 pkt.streamIndex = this.targetStreamIndexes[streamId];
                 this.muxer.writeFrame(pkt)
+                pkt.delete()
             })
         })
     }
@@ -454,9 +469,7 @@ class VideoTargetWriter {
     }
 
     pullOutputs() {
-        const outputs = this.outputs
-        this.outputs = []
-        return outputs
+        return this.#outputIO.buffers.splice(0, this.#outputIO.buffers.length)
     }
 
     close() {

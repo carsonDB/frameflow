@@ -42,7 +42,7 @@ static int64_t seek_func(void* opaque, int64_t pos, int whence) {
             if (pos >= size) return AVERROR_EOF;
             reader.call<val>("seek", (int)pos).await(); break;
         case SEEK_CUR:
-            pos += reader["current"].as<int>();
+            pos += reader["offset"].as<int>();
             if (pos >= size) return AVERROR_EOF;
             reader.call<val>("seek", (int)pos).await(); break;
         case SEEK_END:
@@ -62,12 +62,14 @@ class Demuxer {
     AVIOContext* io_ctx;
     int buf_size = 32*1024;
     std::string _url;
+    val reader;
 public:
     Demuxer() {
         format_ctx = avformat_alloc_context();
     }
     /* async */
-    void build(val reader) {
+    void build(val _reader) {
+        reader = std::move(_reader); // reader will be destroyed at end of this function 
         _url = reader["url"].as<std::string>();
         auto buffer = (uint8_t*)av_malloc(buf_size);
         auto readerPtr = reinterpret_cast<void*>(&reader);

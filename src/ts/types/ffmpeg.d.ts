@@ -22,7 +22,7 @@ interface StdMap<T1, T2> {
 // demuxer
 interface ReaderForDemuxer {
     size: number
-    current: number
+    offset: number
     url: string
     read: (buffer: Uint8Array) => Promise<number>
     seek: (pos: number) => Promise<void>
@@ -122,13 +122,18 @@ interface InferredFormatInfo {
     audio: InferredStreamInfo
 }
 
+interface WriterForMuxer {
+    write(data: Uint8Array): void
+    seek(pos: number): void
+}
+
 // muxer
 class Muxer {
-    constructor(formatName: string, onWrite: (data: Uint8Array) => void)
+    constructor(formatName: string, writer: WriterForMuxer)
     static inferFormatInfo(format: string, filename: string): InferredFormatInfo
     dump(): void
     newStream(encoder: Encoder): void
-    openIO(): void
+    // openIO(): void
     writeHeader(): void
     writeTrailer(): void
     writeFrame(packet: Packet): void
