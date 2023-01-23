@@ -90,7 +90,6 @@ handler.reply('nextFrame', async (_, transferArr) => {
     if (!graph) throw new Error("haven't built graph.")
     const result = await executeStep(graph)
     transferArr.push(...Object.values(result.outputs).map(outs => outs.map(({data}) => data.buffer)).flat())
-
     return result
 })
 
@@ -110,29 +109,39 @@ class InputIO {
     #offset = 0
     #endOfFile = false
     #buffers: DataBuffer[] = []
-    constructor(nodeId: string, url: string, fullSize: number) {
+    constructor(nodeId: string, url?: string, fullSize?: number) {
         this.#id = nodeId
-        this.#fullSize = fullSize
-        this.#url = url
+        this.#fullSize = fullSize ?? 0
+        this.#url = url ?? ''
     }
 
     get url() { return this.#url }
     get size() { return this.#fullSize }
     get offset() { return this.#offset }
 
-    async read(buff: Uint8Array) {
+    async dataReady() {
+        if (this.#buffers.length > 0) return
         // cache empty, read from main thread
-        if (this.#buffers.length == 0) {
-            // first time seek to start position
-            if (this.#offset == 0) {
-                await this.seek(0)
-            }
-            const {inputs} = await handler.send('read', undefined, undefined, this.#id)
-            this.#buffers.push(...inputs)
-            // end of file
-            if (this.#buffers.length == 0)
-                this.#endOfFile = true
+        // first time seek to start position
+        if (this.#offset == 0) {
+            await this.seek(0)
         }
+        const {inputs} = await handler.send('read', undefined, undefined, this.#id)
+        this.#buffers.push(...inputs)
+        // end of file
+        if (this.#buffers.length == 0)
+            this.#endOfFile = true
+    }
+
+    /* for image read */
+    async readImage() {
+        await this.dataReady()
+        return this.#buffers.shift()
+    }
+
+    /* for demuxer (video) read */
+    async read(buff: Uint8Array) {
+        await this.dataReady()
         
         const remainBuffers: DataBuffer[] = []
         const offset = this.#buffers.reduce((offset, b) => {
@@ -367,10 +376,10 @@ class VideoSourceReader {
 class ImageSourceReader {
     node: SourceConfig
     count: number = 0
-    images: DataBuffer[] = []
     // fps: number // todo... different time_base
     decoder: ModuleType['Decoder']
     Packet: FFmpegModule['Packet']
+    #inputIO: InputIO
     #inputEnd = false
     
     constructor(node: SourceConfig, ffmpeg: FFmpegModule) {
@@ -378,19 +387,17 @@ class ImageSourceReader {
         if (node.outStreams.length != 1 || node.outStreams[0].mediaType != 'video') 
             throw `ImageSourceReader only allow one video stream`
         // this.fps = node.outStreams[0].frameRate
+        this.#inputIO = new InputIO(node.id)
         const stream = node.outStreams[0]
         const params = `codec_name:${stream.codecName};height:${stream.height};width:${stream.width}`
         this.decoder = new ffmpeg.Decoder(params, streamId(this.node.id, 0))
         this.Packet = ffmpeg.Packet
     }
 
-    // setInputEnd() { this.#inputEnd = true }
-    // needInputs() { return this.images.length == 0 }
-    // pushInputs(images: DataBuffer[]) { this.images.push(...images) }
     get inputEnd() { return this.#inputEnd }
 
-    readFrames(): Frames {
-        const image = this.images.shift()
+    async readFrames(): Promise<Frames> {
+        const image = await this.#inputIO.readImage()
         if (!image && this.inputEnd) {
             const frames = this.decoder.flush()
             return frames.size() > 0 ? {[streamId(this.node.id, 0)]: frames.get(0)} : {}

@@ -203,7 +203,6 @@ export class Exporter {
     worker: FFWorker
     readers: Reader[] = []
     targetNode: TargetNode
-    outputs: WriteDataBuffer[] = []
     
     constructor(node: TargetNode, worker: FFWorker) {
         this.targetNode = node
@@ -223,41 +222,18 @@ export class Exporter {
     }
     
     /* end when return undefined  */
-    async next(): Promise<WriteDataBuffer | undefined> {
-        // direct return if previous having previous outputs
-        if (this.outputs.length > 0) return this.outputs.shift() as WriteDataBuffer
+    async next(): Promise<{output?: WriteDataBuffer[], done: boolean}> {
         // make sure input reply ready
-        for (const reader of this.readers)
-        await reader.dataReady()
+        await Promise.all(this.readers.map(r => r.dataReady()))
         const {outputs, endWriting} = await this.worker.send('nextFrame', undefined)
+        // todo... temporarily only output one target
         const output = Object.values(outputs)[0]
         
         if (endWriting) {
             await this.close()
         }
         
-        if (!output || output.length == 0) 
-        return this.next()
-        // cache from second ones
-        const firstOne = output[0]
-        this.outputs = output.slice(1)
-        
-        return firstOne
-    }
-    
-    /* for await...of loop */
-    [Symbol.asyncIterator]() {
-        const exporter = this
-        return {
-            async next(): Promise<{value: WriteDataBuffer, done: boolean}> {
-                const output = await exporter.next()
-                return {value: output ?? {data: new Uint8Array(), offset: 0}, done: !output}
-            },
-            async return(): Promise<{value: WriteDataBuffer, done: boolean}> { 
-                await exporter.close() 
-                return { value: {data: new Uint8Array(), offset: 0}, done: true }
-            }
-        }
+        return {output: output, done: endWriting}
     }
 
     async close() {

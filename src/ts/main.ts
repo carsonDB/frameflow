@@ -7,8 +7,8 @@ import { applyMulitpleFilter, applySingleFilter, Filter, FilterArgs } from "./fi
 import { loadWASM } from './loader'
 import { FFWorker } from "./message"
 import { createTargetNode, ExportArgs, Exporter, Reader } from "./streamIO"
-import { FormatMetadata, SourceNode, SourceType, StreamMetadata, StreamRef } from "./types/graph"
-import { isBrowser } from './utils'
+import { DataBuffer, FormatMetadata, SourceNode, SourceType, StreamMetadata, StreamRef, TargetNode, WriteDataBuffer } from "./types/graph"
+import { isNode } from './utils'
 
 
 
@@ -63,22 +63,38 @@ class TrackGroup {
     async export(args: ExportArgs) {
         const worker = new FFWorker(createWorker())
         const node = await createTargetNode(this.streams, args, worker)
-        const exporter = new Exporter(node, worker)
-        await exporter.build()
-        return exporter
+        const target = new Target(node, worker)
+        await target.build()
+        return target
     }
     /**
      * @param filename target filename (currently only in Node.js)
      */
-    async exportTo(dest: string | HTMLVideoElement, args?: ExportArgs) {
-        if (isBrowser && dest instanceof HTMLVideoElement) throw `not implemented yet`
+    exportTo(dest: string): Promise<void>
+    exportTo(dest: typeof ArrayBuffer): Promise<DataBuffer>
+    exportTo(dest: HTMLVideoElement): Promise<void>
+    async exportTo(dest: string | typeof ArrayBuffer | HTMLVideoElement, args?: ExportArgs): Promise<void | DataBuffer> {
+        if (dest instanceof HTMLVideoElement) throw `not implemented yet`
+        else if (dest == ArrayBuffer) {
+            const target = await this.export({...args})
+            const chunks = []
+            let length = 0
+            for await (const chunk of target) {
+                length = Math.max(length, chunk.offset + chunk.data.byteLength)
+                chunks.push(chunk)
+            }
+            console.log('export to')
+            const videoData = new Uint8Array(length)
+            chunks.forEach(c => videoData.set(c.data, c.offset))
+            return videoData
+        }
         else if (typeof dest == 'string') {
             const url = dest
-            if (isBrowser) throw `not implemented yet`
-            const exporter = await this.export({...args, url})
+            if (!isNode) throw `not implemented yet`
+            const target = await this.export({...args, url})
             const { createWriteStream } = require('fs')
             const writer = createWriteStream(url) as NodeJS.WriteStream
-            for await (const {data, offset} of exporter) {
+            for await (const {data, offset} of target) {
                 writer.write(data, ) // todo...
             }
             writer.end()
@@ -127,6 +143,63 @@ class FilterTrackGroup extends TrackGroup {
         const streamRefs = inStreams ? 
             applySingleFilter(inStreams, filter) : applyMulitpleFilter(inStreamsArr, filter)
         super(streamRefs)
+    }
+}
+
+
+class Target {
+    #node: TargetNode
+    #exporter: Exporter
+    #outputs: WriteDataBuffer[] = []
+    #end = false
+    constructor(node: TargetNode, worker: FFWorker) {
+        this.#node = node
+        this.#exporter = new Exporter(node, worker)
+    }
+    
+    async build() {
+        await this.#exporter.build()
+    }
+
+    get end() {
+        return this.#end && this.#outputs.length == 0
+    }
+
+    /**
+     * @returns Each next iteration, return one chunk (WriteDataBuffer).
+     *  Only when done==true then return undefined
+     */
+    async next(): Promise<WriteDataBuffer | undefined> {
+        // direct return if previous having previous outputs
+        if (this.#outputs.length > 0) return this.#outputs.shift() as WriteDataBuffer
+        if (this.#end) return
+        const {output, done} = await this.#exporter.next()
+        this.#end = done
+        /* convert (DataBuffer | undefined)[] to DataBuffer */
+        if (!output && !done) return await this.next()
+        if (output) {
+            this.#outputs.push(...output)
+            return await this.next()
+        }
+    }
+
+    /* for await...of loop */
+    [Symbol.asyncIterator]() {
+        const exporter = this
+        return {
+            async next(): Promise<{value: WriteDataBuffer, done: boolean}> {
+                const output = await exporter.next()
+                return {value: output ?? {data: new Uint8Array(), offset: 0}, done: !output}
+            },
+            async return(): Promise<{value: WriteDataBuffer, done: boolean}> { 
+                await exporter.close() 
+                return { value: {data: new Uint8Array(), offset: 0}, done: true }
+            }
+        }
+    }
+
+    close() {
+        return this.#exporter.close()
     }
 }
 

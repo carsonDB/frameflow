@@ -11,6 +11,7 @@
     <h1>Fetch: local examples/assets/flame.avi</h1>
     <video id="input-video" controls src="./assets/flame.avi"></video><br />
     <h1>Upload video</h1>
+    <video id="output-video" controls></video><br />
     <input id="uploader" type="file" />
     <button id="metadata">Metadata</button>
     <button id="transcode">Transcode</button>
@@ -27,10 +28,21 @@
         
         document.getElementById('transcode').onclick = async () => {
             const src = await fflow.source(video)
-            // const stream = await src.export({ format: 'mp4' }) // need seekable output
-            const stream = await src.export({ format: 'flv' })
-            for await (let {data, offset} of stream)
-                console.log(`Chunk: ${data.byteLength}, offset ${offset}`)
+            const buffer = await src.exportTo(ArrayBuffer, {format: 'webm'})
+            console.log({buffer})
+            const blobUrl = URL.createObjectURL(
+                new Blob([buffer]))
+            document.getElementById('output-video').src = blobUrl
+
+            let link = document.createElement("a"); // Or maybe get it from the current document
+            link.href = blobUrl;
+            link.download = "output video";
+            link.innerHTML = "Click to download";
+            document.body.appendChild(link); // Or append it whereever you want
+            
+            // const stream = await src.export({ format: 'mp4' })
+            // for await (let {data, offset} of stream)
+            //     console.log(`Chunk: ${data.byteLength}, offset ${offset}`)
         }
     </script>
 </body>
