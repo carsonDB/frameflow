@@ -71,6 +71,7 @@ EMSCRIPTEN_BINDINGS(packet) {
         .property("size", &Packet::size)
         .property("streamIndex", &Packet::stream_index, &Packet::set_stream_index)
         .function("getData", &Packet::getData)
+        .function("dump", &Packet::dump)
     ;
 }
 
@@ -79,6 +80,7 @@ EMSCRIPTEN_BINDINGS(frame) {
         // .constructor<FrameParams>()
         .property("name", &Frame::name)
         .function("getData", &Frame::getData)
+        .function("dump", &Frame::dump)
     ;
 }
 

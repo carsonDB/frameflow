@@ -2,7 +2,7 @@
 
 
 Decoder::Decoder(Demuxer& demuxer, int stream_index, string name) {
-    _name = name;
+    this->_name = name;
     auto stream = demuxer.av_stream(stream_index);
     auto codecpar = stream->codecpar;
     auto codec = avcodec_find_decoder(codecpar->codec_id);
@@ -24,6 +24,8 @@ Decoder::Decoder(string params, string name) {
 }
 
 std::vector<Frame*> Decoder::decode(Packet* pkt) {
+    // rescale packet from demuxer stream to encoder
+    av_packet_rescale_ts(pkt->av_packet(), this->stream_time_base, codec_ctx->time_base);
     int ret = avcodec_send_packet(codec_ctx, pkt->av_packet());
     // get all the available frames from the decoder
     std::vector<Frame*> frames;
@@ -39,6 +41,7 @@ std::vector<Frame*> Decoder::decode(Packet* pkt) {
                 break;
             CHECK(false, "decode frame failed");
         }
+        frame->av_ptr()->pts = frame->av_ptr()->best_effort_timestamp;
         frames.push_back(frame);
     }
     return frames;

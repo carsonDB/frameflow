@@ -1,5 +1,5 @@
 # FrameFlow.js
-An easy and flexible audio/video streaming processing library for JavaScript world, based on WebAssembly and FFmpeg.
+An audio/video stream processing library for JavaScript world, based on WebAssembly and FFmpeg.
 
 ## Simple demo
 Demos are in the `./examples/...`
@@ -54,7 +54,6 @@ todo...
 ## How to build (linux)
 *Warning: [webpack dev mode cannot hot reload in WSL2 (windows).](https://mbuotidem.github.io/blog/2021/01/09/how-to-hot-reload-auto-refresh-react-app-on-WSL.html)*
 
-
 ```
 ./build_ffmpeg.sh
 ./build_wasm.sh
@@ -62,11 +61,26 @@ todo...
 
 ### Emscripten
 ```
-git clone https://github.com/emscripten-core/emsdk.git
+git clone https://github.com/emscripten-core/emsdk.git --branch 3.1.30
 ```
 [Install Emscripten SDK](https://emscripten.org/docs/getting_started/downloads.html#installation-instructions-using-the-emsdk-recommended)
 
 ### FFmpeg version (n5.0 release)
 ```
-git clone --depth 1 --branch n5.0 https://github.com/FFmpeg/FFmpeg
+git clone  https://github.com/FFmpeg/FFmpeg --depth 1 --branch n5.0
+```
+
+### External Libraries
+All external libraries sources are under `./ffmpeg_libraries`
+```
+cd ffmpeg_libraries
+```
+
+x264
+```
+git clone https://github.com/mirror/x264.git --depth 1 --branch stable 
+```
+Libvpx
+```
+git clone https://github.com/webmproject/libvpx.git --depth 1 --branch v1.12.0
 ```

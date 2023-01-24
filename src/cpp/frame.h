@@ -1,10 +1,12 @@
 #ifndef FRAME_H
 #define FRAME_H
 
+#include <cstdio>
 #include <emscripten/val.h>
 extern "C" {
     #include <libavutil/frame.h>
     #include <libavutil/imgutils.h>
+    #include <libavutil/timestamp.h>
 }
 
 #include "utils.h"
@@ -29,6 +31,13 @@ public:
         return emscripten::val(emscripten::typed_memory_view(
             av_frame->linesize[i] * av_frame->height, av_frame->data[i]));
         // todo...get whole buffer
+    }
+
+    void dump() {
+        auto& time_base = av_frame->time_base;
+        printf("Frame (pts:%s pts_time:%s)\n",
+            av_ts2str(av_frame->pts), av_ts2timestr(av_frame->pts, &time_base)
+        );
     }
 
     AVFrame* av_ptr() { return av_frame; };

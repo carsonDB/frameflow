@@ -60,6 +60,7 @@ class Muxer {
     AVFormatContext* format_ctx;
     AVIOContext* io_ctx;
     std::vector<Stream*> streams;
+    std::vector<AVRational> encoder_time_bases;
     int buf_size = 32*1024;
     val writer;
 
@@ -78,11 +79,10 @@ public:
     ~Muxer() {
         for (const auto& s : streams)
             delete s;
+        avformat_free_context(format_ctx);
         if (io_ctx)
             av_freep(&io_ctx->buffer);
         avio_context_free(&io_ctx);
-        avformat_free_context(format_ctx);
-        format_ctx->pb != NULL && avio_closep(&format_ctx->pb);
     }
 
     static InferredFormatInfo inferFormatInfo(string format_name, string filename) {
@@ -114,9 +114,10 @@ public:
             encoder->setFlags(AV_CODEC_FLAG_GLOBAL_HEADER);
 
         streams.push_back(new Stream(format_ctx, encoder));
+        encoder_time_bases.push_back(encoder->av_codecContext_ptr()->time_base);     
     }
 
-    void writeHeader() {        
+    void writeHeader() {
         auto ret = avformat_write_header(format_ctx, NULL);
         CHECK(ret >= 0, "Error occurred when opening output file");
     }
@@ -126,13 +127,14 @@ public:
     }
     void writeFrame(Packet* packet) {
         auto av_pkt = packet->av_packet();
-        auto out_av_stream = streams[av_pkt->stream_index]->av_stream_ptr();
-        /* rescale output packet timestamp values from codec to stream timebase */
-        // av_packet_rescale_ts(av_pkt, av_pkt->time_base, out_av_stream->time_base);
-        // todo...
+        auto stream_i = av_pkt->stream_index;
+        CHECK(stream_i >= 0 && stream_i < streams.size(), "stream_index of packet not in valid streams");
+        auto av_stream = streams[stream_i]->av_stream_ptr();
+        // rescale packet from encoder to muxer stream
+        CHECK(stream_i >= 0 && stream_i < encoder_time_bases.size(), "stream_index of packet not in valid encoder_time_bases");
+        av_packet_rescale_ts(av_pkt, encoder_time_bases[stream_i], av_stream->time_base);
         int ret = av_interleaved_write_frame(format_ctx, av_pkt);
         CHECK(ret >= 0, "interleave write frame error");
-
     }
 };
 

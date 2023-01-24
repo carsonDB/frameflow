@@ -29,6 +29,7 @@ ARGS=(
   -s MODULARIZE=1
   -s EXPORT_ES6=1
   -s EXPORT_NAME=$NAME
+  -s FILESYSTEM=0
   -s WASM_BIGINT=1 # need platform support JS BigInt
   -s ENVIRONMENT='web,worker' # node?
   

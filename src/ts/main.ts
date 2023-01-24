@@ -2,6 +2,7 @@
  * track or track group for user convient api
  */
 import { v4 as uuid } from 'uuid'
+import mime from 'mime'
 
 import { applyMulitpleFilter, applySingleFilter, Filter, FilterArgs } from "./filters"
 import { loadWASM } from './loader'
@@ -54,10 +55,10 @@ class TrackGroup {
         return new FilterTrackGroup({type: 'trim', args}, this.streams) 
     }
     loop(args: FilterArgs<'loop'>) { return new FilterTrackGroup({ type: 'loop', args }, this.streams) }
-    setVolume(args: FilterArgs<'setVolume'>) { 
-        return new FilterTrackGroup({ type: 'setVolume', args}, this.streams) 
+    setVolume(args: FilterArgs<'volume'>) { 
+        return new FilterTrackGroup({ type: 'volume', args}, this.streams) 
     }
-    setFormat(args: FilterArgs<'format'>) { return new FilterTrackGroup({ type: 'format', args }, this.streams) }
+    setDataFormat(args: FilterArgs<'format'>) { return new FilterTrackGroup({ type: 'format', args }, this.streams) }
 
     // export media in stream
     async export(args: ExportArgs) {
@@ -72,10 +73,14 @@ class TrackGroup {
      */
     exportTo(dest: string): Promise<void>
     exportTo(dest: typeof ArrayBuffer): Promise<DataBuffer>
+    exportTo(dest: typeof Blob): Promise<Blob>
     exportTo(dest: HTMLVideoElement): Promise<void>
-    async exportTo(dest: string | typeof ArrayBuffer | HTMLVideoElement, args?: ExportArgs): Promise<void | DataBuffer> {
+    async exportTo(
+        dest: string | typeof ArrayBuffer | typeof Blob | HTMLVideoElement, 
+        args?: ExportArgs
+    ): Promise<void | DataBuffer | Blob> {
         if (dest instanceof HTMLVideoElement) throw `not implemented yet`
-        else if (dest == ArrayBuffer) {
+        else if (dest == ArrayBuffer || dest == Blob) {
             const target = await this.export({...args})
             const chunks = []
             let length = 0
@@ -83,10 +88,10 @@ class TrackGroup {
                 length = Math.max(length, chunk.offset + chunk.data.byteLength)
                 chunks.push(chunk)
             }
-            console.log('export to')
             const videoData = new Uint8Array(length)
             chunks.forEach(c => videoData.set(c.data, c.offset))
-            return videoData
+            if (dest == ArrayBuffer) return videoData
+            return new Blob([videoData], {type: mime.getType(target.format) ?? ''})
         }
         else if (typeof dest == 'string') {
             const url = dest
@@ -163,6 +168,10 @@ class Target {
 
     get end() {
         return this.#end && this.#outputs.length == 0
+    }
+
+    get format() {
+        return this.#node.format.container.formatName
     }
 
     /**

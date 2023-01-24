@@ -28,10 +28,9 @@
         
         document.getElementById('transcode').onclick = async () => {
             const src = await fflow.source(video)
-            const buffer = await src.exportTo(ArrayBuffer, {format: 'webm'})
-            console.log({buffer})
-            const blobUrl = URL.createObjectURL(
-                new Blob([buffer]))
+            const blob = await src.exportTo(Blob, {format: 'mp4'})
+            console.log({blob})
+            const blobUrl = URL.createObjectURL(blob)
             document.getElementById('output-video').src = blobUrl
 
             let link = document.createElement("a"); // Or maybe get it from the current document

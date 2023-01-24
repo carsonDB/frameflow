@@ -5,7 +5,7 @@ export type Filter =
     { type: 'tracks', args: 'video' | 'audio' } |
     { type: 'trim', args: { startTime: number, duration: number } } |
     { type: 'loop', args: number } |
-    { type: 'setVolume', args: number } |
+    { type: 'volume', args: number } |
     { type: 'merge' } | // implicit args: {number of inputs}
     { type: 'concat' } |
     { type: 'format', args: { pixelFormat?: string, sampleFormat?: string, sampleRate?: number, channelLayout?: string } }
@@ -83,7 +83,7 @@ export function applySingleFilter(streamRefs: StreamRef[], filter: Filter): Stre
                 }
                 return {from, index: 0}
             }
-            case 'setVolume': {
+            case 'volume': {
                 const volume = filter.args
                 if (s.mediaType == 'video') return streamRef
                 const from: FilterNode = {

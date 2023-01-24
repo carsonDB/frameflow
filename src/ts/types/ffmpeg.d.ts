@@ -85,12 +85,14 @@ class Packet {
     get streamIndex(): number
     set streamIndex(index: number)
     getData(): Uint8Array
+    dump():void
     delete(): void
 }
 
 // frame
 class Frame {
     getData(plane_index: number): Uint8Array
+    dump():void
     delete(): void
     name: string
 }
