@@ -25,7 +25,7 @@ Decoder::Decoder(string params, string name) {
 
 std::vector<Frame*> Decoder::decode(Packet* pkt) {
     // rescale packet from demuxer stream to encoder
-    av_packet_rescale_ts(pkt->av_packet(), this->stream_time_base, codec_ctx->time_base);
+    av_packet_rescale_ts(pkt->av_packet(), this->from_time_base, codec_ctx->time_base);
     int ret = avcodec_send_packet(codec_ctx, pkt->av_packet());
     // get all the available frames from the decoder
     std::vector<Frame*> frames;

@@ -17,7 +17,7 @@ using namespace std;
 class Decoder {
     AVCodecContext* codec_ctx;
     std::string _name;
-    AVRational stream_time_base;
+    AVRational from_time_base;
 public:
     Decoder(Demuxer& demuxer, int stream_index, std::string name);
     Decoder(string codec_name, std::string name);

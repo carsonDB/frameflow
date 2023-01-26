@@ -30,7 +30,7 @@ struct StreamInfo {
     // video
     int width;
     int height;
-    AVRational frame_rate;
+    double frame_rate;
     AVRational sample_aspect_ratio;
     // audio
     int sample_rate;

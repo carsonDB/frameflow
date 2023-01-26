@@ -51,12 +51,15 @@ stream.close()
 ## Get started
 todo...
 
-## How to build (linux)
+
+## How to build
 *Warning: [webpack dev mode cannot hot reload in WSL2 (windows).](https://mbuotidem.github.io/blog/2021/01/09/how-to-hot-reload-auto-refresh-react-app-on-WSL.html)*
 
+### Dependencies (Ubuntu)
+Tools dependencies install
 ```
-./build_ffmpeg.sh
-./build_wasm.sh
+sudo apt-get update -y
+sudo apt-get install -y pkg-config
 ```
 
 ### Emscripten
@@ -84,3 +87,10 @@ Libvpx
 ```
 git clone https://github.com/webmproject/libvpx.git --depth 1 --branch v1.12.0
 ```
+
+### Compilation 
+```
+./build_ffmpeg.sh
+./build_wasm.sh
+```
+

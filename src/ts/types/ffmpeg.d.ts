@@ -69,7 +69,7 @@ interface StreamInfo {
     // video
     width: number
     height: number
-    frameRate: AVRational
+    frameRate: number
     sampleAspectRatio: AVRational
     // audio
     channels: number
@@ -83,7 +83,6 @@ class Packet {
     constructor(bufSize: number, pts: number)
     size: number
     get streamIndex(): number
-    set streamIndex(index: number)
     getData(): Uint8Array
     dump():void
     delete(): void
@@ -138,7 +137,7 @@ class Muxer {
     // openIO(): void
     writeHeader(): void
     writeTrailer(): void
-    writeFrame(packet: Packet): void
+    writeFrame(packet: Packet, streamIndex: number): void
     delete(): void
 }
 

@@ -33,7 +33,7 @@ export interface VideoStreamMetadata extends CommonStreamMetadata {
     height: number,
     width: number,
     pixelFormat: string
-    frameRate: Rational
+    frameRate: number
     sampleAspectRatio: Rational
 }
 

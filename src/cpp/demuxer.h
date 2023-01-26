@@ -60,6 +60,7 @@ static int64_t seek_for_read(void* opaque, int64_t pos, int whence) {
 class Demuxer {
     AVFormatContext* format_ctx;
     AVIOContext* io_ctx;
+    std::vector<int64_t> currentStreamsPTS; 
     int buf_size = 32*1024;
     std::string _url;
     val reader;
@@ -98,6 +99,11 @@ public:
     Packet* read() {
         auto pkt = new Packet();
         auto ret = av_read_frame(format_ctx, pkt->av_packet());
+        // update current stream pts
+        auto av_pkt = pkt->av_packet();
+        const auto& time_base = format_ctx->streams[pkt->stream_index()]->time_base;
+        auto next_pts = av_pkt->pts + av_pkt->duration;
+        currentStreamsPTS[pkt->stream_index()] = next_pts * (double)time_base.num / time_base.den;
         return pkt;
     }
 
@@ -107,6 +113,12 @@ public:
 
     FormatInfo getMetadata() { 
         return createFormatInfo(format_ctx); 
+    }
+
+    /* timestamp of current first packet of the stream, which will be parsed next */
+    double currentTime(int stream_index) {
+        CHECK(stream_index >= 0 && stream_index < currentStreamsPTS.size(), "stream_index not in valid currentStreamsPTS");
+        return currentStreamsPTS[stream_index];
     }
 
 // only for c++    

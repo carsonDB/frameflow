@@ -25,7 +25,7 @@ public:
     
     int stream_index() const { return packet->stream_index; }
     
-    void set_stream_index(int index) { packet->stream_index = index; }
+    // void set_stream_index(int index) { packet->stream_index = index; }
     
     emscripten::val getData() { 
         return emscripten::val(emscripten::typed_memory_view(packet->size, packet->data)); // check length of data

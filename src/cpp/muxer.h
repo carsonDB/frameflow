@@ -60,7 +60,7 @@ class Muxer {
     AVFormatContext* format_ctx;
     AVIOContext* io_ctx;
     std::vector<Stream*> streams;
-    std::vector<AVRational> encoder_time_bases;
+    std::vector<AVRational> from_time_bases;
     int buf_size = 32*1024;
     val writer;
 
@@ -114,7 +114,7 @@ public:
             encoder->setFlags(AV_CODEC_FLAG_GLOBAL_HEADER);
 
         streams.push_back(new Stream(format_ctx, encoder));
-        encoder_time_bases.push_back(encoder->av_codecContext_ptr()->time_base);     
+        from_time_bases.push_back(encoder->av_codecContext_ptr()->time_base);     
     }
 
     void writeHeader() {
@@ -125,14 +125,13 @@ public:
         auto ret = av_write_trailer(format_ctx); 
         CHECK(ret == 0, "Error when writing trailer");
     }
-    void writeFrame(Packet* packet) {
+    void writeFrame(Packet* packet, int stream_i) {
         auto av_pkt = packet->av_packet();
-        auto stream_i = av_pkt->stream_index;
         CHECK(stream_i >= 0 && stream_i < streams.size(), "stream_index of packet not in valid streams");
         auto av_stream = streams[stream_i]->av_stream_ptr();
         // rescale packet from encoder to muxer stream
-        CHECK(stream_i >= 0 && stream_i < encoder_time_bases.size(), "stream_index of packet not in valid encoder_time_bases");
-        av_packet_rescale_ts(av_pkt, encoder_time_bases[stream_i], av_stream->time_base);
+        CHECK(stream_i >= 0 && stream_i < from_time_bases.size(), "stream_index of packet not in valid from_time_bases");
+        av_packet_rescale_ts(av_pkt, from_time_bases[stream_i], av_stream->time_base);
         int ret = av_interleaved_write_frame(format_ctx, av_pkt);
         CHECK(ret >= 0, "interleave write frame error");
     }

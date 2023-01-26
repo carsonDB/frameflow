@@ -69,7 +69,7 @@ EMSCRIPTEN_BINDINGS(packet) {
         .constructor<>()
         .constructor<int, int64_t>()
         .property("size", &Packet::size)
-        .property("streamIndex", &Packet::stream_index, &Packet::set_stream_index)
+        .property("streamIndex", &Packet::stream_index)
         .function("getData", &Packet::getData)
         .function("dump", &Packet::dump)
     ;

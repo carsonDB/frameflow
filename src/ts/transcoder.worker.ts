@@ -16,7 +16,7 @@ const vec2Array = <T>(vec: StdVector<T>) => {
 
 function streamMetadataToInfo(s: StreamMetadata): StreamInfo {
     const format = s.mediaType == 'audio' ? s.sampleFormat : s.pixelFormat
-    const defaultParams = {width: 0, height: 0, frameRate: {num: 0, den: 1}, sampleRate: 0, 
+    const defaultParams = {width: 0, height: 0, frameRate: 0, sampleRate: 0, 
         channelLayout: '', channels: 0, sampleAspectRatio: {num: 0, den: 1} }
     return {...defaultParams, ...s, format}
 }
@@ -453,8 +453,7 @@ class VideoTargetWriter {
             if (!this.encoders[streamId] || !frame) return
             const pktVec = this.encoders[streamId].encode(frame)
             vec2Array(pktVec).forEach(pkt => {
-                pkt.streamIndex = this.targetStreamIndexes[streamId];
-                this.muxer.writeFrame(pkt)
+                this.muxer.writeFrame(pkt, this.targetStreamIndexes[streamId])
                 pkt.delete()
             })
         })
@@ -462,9 +461,9 @@ class VideoTargetWriter {
 
     /* end writing (encoders flush + writeTrailer) */
     writeEnd() {
-        Object.values(this.encoders).forEach(encoder => {
+        Object.entries(this.encoders).forEach(([streamId, encoder]) => {
             const pktVec = encoder.flush()
-            vec2Array(pktVec).forEach(pkt => this.muxer.writeFrame(pkt))
+            vec2Array(pktVec).forEach(pkt => this.muxer.writeFrame(pkt, this.targetStreamIndexes[streamId]))
         })
         this.muxer.writeTrailer()
     }
