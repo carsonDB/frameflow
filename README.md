@@ -1,5 +1,9 @@
-# FrameFlow.js
-An audio/video stream processing library for JavaScript world, based on WebAssembly and FFmpeg.
+# FrameFlow
+An audio/video stream processing library for **JavaScript** world, based on WebAssembly and FFmpeg.
+
+Note: current verison is at **prototype** stage. Only web browser examples are tested.
+Nodejs hasn't tested yet.
+And almost everything is under optimization. You words will shape the future of FrameFlow.
 
 ## Simple demo
 Demos are in the `./examples/...`
@@ -48,8 +52,72 @@ stream.close()
 
 ```
 
-## Get started
+## Install
 todo...
+
+## Get started
+
+### Create source
+Accept multiple type of sources, e.g. url / path / Blob / ArrayBuffer / ReadableStream.
+TypeScript will give hints.
+```JavaScript
+let video = await fflow.source('./test.avi')
+```
+
+### Tracks
+Usually, we can directly operate on multiple tracks as a group.
+And one track is seen as a group in which only one element.
+Thus, created source is also a group.
+And it is also convenient to apply filters to a group of tracks at a time.
+```JavaScript
+let video = await fflow.source('./test.avi') // return track group
+let tracks = video.tracks() // return an array of tracks. (audio / video)
+let audioTracks = video.tracks('audio') // return track group (contain audio tracks)
+let newGroup = fflow.group([audioTracks[0], video.tracks()[1]]) // group multiple tracks into one
+```
+
+### Get metadata
+Metadata can provide you some information, which can be used for filters' arguments.
+And internally, they are also used for checking your created filter graph, which will explain in [filters](#filters).
+```JavaScript
+let video = await fflow.source('./test.avi')
+console.log(video.duration) // get one item in metadata
+console.log(video.metadata) // get all metadata information (container + streams)
+```
+
+### Transcode
+- Fastest way (exportTo)
+This api can export to multiple types of outputs, e.g. url / path / Blob / ArrayBuffer.
+```JavaScript
+let video = await fflow.source('./test.avi')
+await video.exportTo('./out_test.mp4') // no return
+let blob = await video.exportTo(Blob) // return a new blob
+```
+- Flexible way with automatic pace (export)
+```JavaScript
+let target = await video.export()
+for await (let chunk of target) {
+    /* post-processing chunk */
+    chunk.data // ArrayBuffer / Buffer
+    chunk.offset // chunk offset position (bytes) in the output file
+}
+```
+- Most flexible way with manual control (export)
+Actually this way is the basic method for above two ways.
+```JavaScript
+let target = await video.export()
+let chunk = await target.next()
+while (chunk.data) {
+    chunk = target.next()
+    /* post-processing chunk */
+}
+// execute this line if quit halway.
+await target.close()
+```
+
+### Filters
+#filters
+Using todo...
 
 
 ## How to build

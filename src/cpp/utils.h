@@ -4,8 +4,11 @@
 #define CHECK(cond, msg) assert(cond && msg)
 
 #include <vector>
+#include <emscripten/val.h>
 #include <map>
-#include "frame.h"
+extern "C" {
+    #include <libavutil/log.h>
+}
 using namespace std;
 
 
@@ -20,7 +23,8 @@ map<T1, T2> createMap() {
     return map<T1, T2>();
 }
 
-
+/* set custom (console) Logger */
+void setConsoleLogger(bool verbose);
 
 
 #endif

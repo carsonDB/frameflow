@@ -157,6 +157,7 @@ interface ModuleClass {
 type ModuleInstance = {[k in keyof ModuleClass]: InstanceType<ModuleClass[k]>}
 
 interface ModuleFunction {
+    setConsoleLogger(verbose: boolean): void
     createFrameVector(): StdVector<Frame>
     createStringStringMap(): StdMap<string, string>
 }

@@ -28,7 +28,7 @@
         
         document.getElementById('transcode').onclick = async () => {
             const src = await fflow.source(video)
-            const blob = await src.exportTo(Blob, {format: 'mp4'})
+            const blob = await src.exportTo(Blob, {format: 'flv'})
             console.log({blob})
             const blobUrl = URL.createObjectURL(blob)
             document.getElementById('output-video').src = blobUrl

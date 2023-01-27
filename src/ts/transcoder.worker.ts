@@ -50,16 +50,15 @@ let graph: GraphRuntime | null = null
 
 
 // initiantate wasm module
-async function loadModule(wasmBinary: ArrayBuffer): Promise<FFmpegModule> {
-    return await createModule({
-         // Module callback functions: https://emscripten.org/docs/api_reference/module.html
-         print: (msg: string) => console.log(msg),
-         printErr: (msg: string) => console.error(msg),
-         // locateFile: (path) => path.endsWith(`.wasm`) ? wasmFile : path
-         wasmBinary
-     })
-}
+async function loadModule(wasmBinary: ArrayBuffer) {
+    const ffmpeg: FFmpegModule = await createModule({
+        // Module callback functions: https://emscripten.org/docs/api_reference/module.html
+        wasmBinary
+    })
+    ffmpeg.setConsoleLogger(false)
 
+    return ffmpeg
+}
 
 
 const handler = new WorkerHandlers()

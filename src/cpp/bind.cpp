@@ -139,6 +139,8 @@ EMSCRIPTEN_BINDINGS(utils) {
 	register_vector<Packet*>("vector<Packet>");
 	register_vector<StreamInfo>("vector<StreamInfo>");
     register_map<std::string, std::string>("MapStringString");
+
+    emscripten::function("setConsoleLogger", &setConsoleLogger);
 }
 
 #endif
