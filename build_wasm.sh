@@ -34,6 +34,7 @@ ARGS=(
   -s FILESYSTEM=0
   -s WASM_BIGINT=1 # need platform support JS BigInt
   -s ENVIRONMENT='web,worker' # node?
+  -s ALLOW_MEMORY_GROWTH=1
   
   -s ASYNCIFY # need -O3 when enable asyncify
   -O3

@@ -3,6 +3,7 @@
 
 #include <cstdio>
 #include <string>
+#include <vector>
 #include <emscripten/val.h>
 extern "C" {
     #include <libavformat/avformat.h>
@@ -60,7 +61,7 @@ static int64_t seek_for_read(void* opaque, int64_t pos, int whence) {
 class Demuxer {
     AVFormatContext* format_ctx;
     AVIOContext* io_ctx;
-    std::vector<int64_t> currentStreamsPTS; 
+    std::vector<double> currentStreamsPTS; 
     int buf_size = 32*1024;
     std::string _url;
     val reader;
@@ -84,6 +85,10 @@ public:
         CHECK(ret == 0, "Could not open input file.");
         ret = avformat_find_stream_info(format_ctx, NULL);
         CHECK(ret >= 0, "Could not open find stream info.");
+        // init currentStreamsPTS
+        for (int i = 0; i < format_ctx->nb_streams; i++) {
+            currentStreamsPTS.push_back(0);
+        }
     }
     ~Demuxer() { 
         avformat_close_input(&format_ctx);

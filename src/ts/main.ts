@@ -1,13 +1,13 @@
 /**
  * track or track group for user convient api
  */
-import { v4 as uuid } from 'uuid'
 import mime from 'mime'
+import { v4 as uuid } from 'uuid'
 
 import { applyMulitpleFilter, applySingleFilter, Filter, FilterArgs } from "./filters"
 import { loadWASM } from './loader'
 import { FFWorker } from "./message"
-import { createTargetNode, ExportArgs, Exporter, Reader } from "./streamIO"
+import { Exporter, Reader } from "./streamIO"
 import { DataBuffer, FormatMetadata, SourceNode, SourceType, StreamMetadata, StreamRef, TargetNode, WriteDataBuffer } from "./types/graph"
 import { isNode } from './utils'
 
@@ -211,6 +211,43 @@ class Target {
         return this.#exporter.close()
     }
 }
+
+interface MediaStreamArgs {
+    // codec?: string // todo... replace with discrete options
+}
+
+interface ExportArgs {
+    url?: string // export filename
+    format?: string // specified video/audio/image container format
+    audio?: MediaStreamArgs, // audio track configurations in video container
+    video?: MediaStreamArgs // video track configurations in video container
+}
+
+async function createTargetNode(inStreams: StreamRef[], args: ExportArgs, worker: FFWorker): Promise<TargetNode> {
+    const wasm = await loadWASM()
+    // infer container format from url
+    if (!args.format && !args.url) throw `must provide format name or url`
+    // todo... infer too slow ??
+    const {format, video, audio} = await worker.send('inferFormatInfo',
+        { format: args.format ?? '', url: args.url ?? '', wasm })
+
+    // format metadata, take first stream as primary stream
+    const keyStream = inStreams[0].from.outStreams[inStreams[0].index]
+    const { duration, bitRate } = keyStream
+    const outStreams = inStreams.map(s => {
+        const stream = s.from.outStreams[s.index]
+        if (stream.mediaType == 'audio') 
+            return {...stream, codecName: audio.codecName, sampleFormat: audio.format}
+        else if (stream.mediaType == 'video') 
+            return {...stream, codecName: video.codecName, pixelFormat: video.format}
+        return stream
+    })
+
+    return {type: 'target', inStreams, outStreams,
+        format: { type: mime.getType(format)?.includes('image') ? 'image' : 'video', 
+            container: {formatName: format, duration, bitRate}}}
+}
+
 
 
 const multipleFilter = {

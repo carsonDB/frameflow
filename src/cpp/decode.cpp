@@ -10,6 +10,8 @@ Decoder::Decoder(Demuxer& demuxer, int stream_index, string name) {
     codec_ctx = avcodec_alloc_context3(codec);
     avcodec_parameters_to_context(codec_ctx, codecpar);
     avcodec_open2(codec_ctx, codec, NULL);
+    // from stream time base
+    this->from_time_base = stream->time_base;
 }
 
 Decoder::Decoder(string params, string name) {
@@ -20,10 +22,12 @@ Decoder::Decoder(string params, string name) {
     CHECK(codec != NULL, "Could not find input codec");
     codec_ctx = avcodec_alloc_context3(codec);
     avcodec_open2(codec_ctx, codec, &dict);
+    // todo... from_time_base
     av_dict_free(&dict);
 }
 
 std::vector<Frame*> Decoder::decode(Packet* pkt) {
+    CHECK(from_time_base.num > 0, "from_time_base must be set");
     // rescale packet from demuxer stream to encoder
     av_packet_rescale_ts(pkt->av_packet(), this->from_time_base, codec_ctx->time_base);
     int ret = avcodec_send_packet(codec_ctx, pkt->av_packet());

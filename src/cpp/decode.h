@@ -17,12 +17,13 @@ using namespace std;
 class Decoder {
     AVCodecContext* codec_ctx;
     std::string _name;
-    AVRational from_time_base;
+    AVRational from_time_base = {0, 1};
 public:
     Decoder(Demuxer& demuxer, int stream_index, std::string name);
     Decoder(string codec_name, std::string name);
     ~Decoder() { avcodec_free_context(&codec_ctx); };
     std::string name() const { return _name; }
+    void setTimeBase(AVRational time_base) { codec_ctx->time_base = time_base; }
     std::vector<Frame*> decode(Packet* pkt);
     std::vector<Frame*> flush() {
         auto pkt = new Packet();

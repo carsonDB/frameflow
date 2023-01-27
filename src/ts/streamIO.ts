@@ -159,43 +159,6 @@ export class Reader {
 }
 
 
-interface MediaStreamArgs {
-    codec?: string // todo... replace with discrete options
-}
-
-export interface ExportArgs {
-    url?: string // export filename
-    image?: string // must provide image format if export images
-    format?: string // specified video/audio container format
-    audio?: MediaStreamArgs, // audio track configurations in video container
-    video?: MediaStreamArgs // video track configurations in video container
-}
-
-export async function createTargetNode(inStreams: StreamRef[], args: ExportArgs, worker: FFWorker): Promise<TargetNode> {
-    const wasm = await loadWASM()
-    // infer container format from url
-    if (!args.format && !args.url) throw `must provide format name or url`
-    // todo... infer too slow ??
-    const {format, video, audio} = await worker.send('inferFormatInfo', 
-        { format: args.format ?? '', url: args.url ?? '', wasm })
-
-    // format metadata, take first stream as primary stream
-    const keyStream = inStreams[0].from.outStreams[inStreams[0].index]
-    const { duration, bitRate } = keyStream
-    const outStreams = inStreams.map(s => {
-        const stream = s.from.outStreams[s.index]
-        if (stream.mediaType == 'audio') 
-            return {...stream, codecName: audio.codecName, sampleFormat: audio.format}
-        else if (stream.mediaType == 'video') 
-            return {...stream, codecName: video.codecName, pixelFormat: video.format}
-        return stream
-    })
-
-    return {type: 'target', inStreams, outStreams,
-        format: { type: args.image ? 'image' : 'video', 
-            container: {formatName: format, duration, bitRate}}}
-}
-
 /**
  * stream output handler
  */
@@ -227,6 +190,7 @@ export class Exporter {
         await Promise.all(this.readers.map(r => r.dataReady()))
         const {outputs, endWriting} = await this.worker.send('nextFrame', undefined)
         // todo... temporarily only output one target
+        if (Object.values(outputs).length !=  1) throw `Currently only one target at a time allowed`
         const output = Object.values(outputs)[0]
         
         if (endWriting) {
