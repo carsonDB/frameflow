@@ -83,6 +83,10 @@ export class Reader {
         this.streamCreator = sourceToStreamCreator(source)
         this.#enableReply()
     }
+
+    async build() {
+        await this.createStream(0)
+    }
     
     #enableReply() {
         
@@ -125,15 +129,15 @@ export class Reader {
     /* unify nodejs and browser streams */
     async readFromStream(): Promise<DataBuffer | undefined> {
         // create stream and reader for the first time
-        const reader = this.reader ?? (await this.createStream(0)).reader
-        if ('readable' in reader) {
-            if (reader.readable) {
-                const output = reader.read()
+        if (!this.reader) throw `async build first`
+        if ('readable' in this.reader) {
+            if (this.reader.readable) {
+                const output = this.reader.read()
                 if (typeof output == 'string') throw `cannot get string from source stream`
                 return output
             }
             else {
-                const stream = reader
+                const stream = this.reader
                 return new Promise((resolve, reject) => {
                     stream.on('readable', () => {
                         const output = stream.read()
@@ -143,7 +147,7 @@ export class Reader {
                 })
             }
         }
-        const {done, value} = await reader.read()
+        const {done, value} = await this.reader.read()
         if (done) this.end = true
 
         return value
@@ -178,6 +182,7 @@ export class Exporter {
         for (const [node, id] of node2id) {
             if (node.type != 'source') continue
             const reader = new Reader(id, node.source, this.worker)
+            await reader.build()
             this.readers.push(reader)
         }
         const wasm = await loadWASM()
@@ -185,19 +190,15 @@ export class Exporter {
     }
     
     /* end when return undefined  */
-    async next(): Promise<{output?: WriteDataBuffer[], done: boolean}> {
+    async next(): Promise<{output?: WriteDataBuffer[], progress: number, done: boolean}> {
         // make sure input reply ready
         await Promise.all(this.readers.map(r => r.dataReady()))
-        const {outputs, endWriting} = await this.worker.send('nextFrame', undefined)
+        const {outputs, progress, endWriting} = await this.worker.send('nextFrame', undefined)
         // todo... temporarily only output one target
         if (Object.values(outputs).length !=  1) throw `Currently only one target at a time allowed`
         const output = Object.values(outputs)[0]
         
-        if (endWriting) {
-            await this.close()
-        }
-        
-        return {output: output, done: endWriting}
+        return {output: output, progress, done: endWriting}
     }
 
     async close() {

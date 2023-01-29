@@ -15,6 +15,7 @@
     <input id="uploader" type="file" />
     <button id="metadata">Metadata</button>
     <button id="transcode">Transcode</button>
+    <span id="progress"></span>
     <script>
         window.onload = () => window.fflow = frameflow
         let video = null
@@ -28,8 +29,9 @@
         
         document.getElementById('transcode').onclick = async () => {
             const src = await fflow.source(video)
-            const blob = await src.exportTo(Blob, {format: 'flv'})
-            console.log({blob})
+            const output = src.tracks()[1]
+            const blob = await output.exportTo(Blob, {format: 'avi', 
+                 progress: pg => document.getElementById('progress').textContent = `${(pg*100).toFixed(2)}%`})
             const blobUrl = URL.createObjectURL(blob)
             document.getElementById('output-video').src = blobUrl
 

@@ -22,6 +22,7 @@ async function createSource(src: SourceType, options?: {}) {
     const worker = new FFWorker(createWorker())
     // convert all src to stream
     const reader = new Reader(id, src, worker)
+    await reader.build()
     const wasm = await loadWASM()
     const metadata = await worker.send('getMetadata', {id, fullSize: reader.fullSize, url: reader.url, wasm})
     const srcTracks = new SourceTrackGroup(src, metadata.streams, metadata.container, reader.fullSize)
@@ -40,13 +41,20 @@ class TrackGroup {
     }
 
     /**
+     * TrackGroup -> TrackGroup
+     * @argument mediaType filter condition
+     */
+    filter(mediaType: 'video' | 'audio') {
+        const streams = this.streams.filter(s => s.from.outStreams[s.index].mediaType == mediaType)
+        return new TrackGroup(streams)
+    }
+
+    /**
      * TrackGroup -> Track[]
      * @argument mediaType filter condition
      */
-    tracks(mediaType?: 'video' | 'audio') {
+    tracks() {
         let streams = this.streams
-        if (mediaType)
-            streams = streams.filter(s => s.from.outStreams[s.index].mediaType == mediaType)
         return streams.map(s => new Track(s))
     }
 
@@ -61,10 +69,10 @@ class TrackGroup {
     setDataFormat(args: FilterArgs<'format'>) { return new FilterTrackGroup({ type: 'format', args }, this.streams) }
 
     // export media in stream
-    async export(args: ExportArgs) {
+    async export(args?: ExportArgs) {
         const worker = new FFWorker(createWorker())
-        const node = await createTargetNode(this.streams, args, worker)
-        const target = new Target(node, worker)
+        const node = await createTargetNode(this.streams, args ?? {}, worker)
+        const target = new Target(node, worker, args ?? {})
         await target.build()
         return target
     }
@@ -81,7 +89,7 @@ class TrackGroup {
     ): Promise<void | DataBuffer | Blob> {
         if (dest instanceof HTMLVideoElement) throw `not implemented yet`
         else if (dest == ArrayBuffer || dest == Blob) {
-            const target = await this.export({...args})
+            const target = await this.export(args)
             const chunks = []
             let length = 0
             for await (const chunk of target) {
@@ -152,14 +160,40 @@ class FilterTrackGroup extends TrackGroup {
 }
 
 
+class Progress {
+    progress = 0
+    callback?: (pg: number) => void
+    handler: ReturnType<typeof setInterval>
+    constructor(callback?: (pg: number) => void, ms=200, decimals=4) {
+        this.callback = callback
+        const p = Math.pow(10, decimals)
+        this.handler = setInterval(() => {
+            this.callback?.(this.progress)
+        }, ms)
+    }
+
+    setProgress(pg: number) {
+        this.progress = pg
+    }
+
+    close() {
+        clearInterval(this.handler)
+    }
+
+}
+
 class Target {
     #node: TargetNode
     #exporter: Exporter
     #outputs: WriteDataBuffer[] = []
     #end = false
-    constructor(node: TargetNode, worker: FFWorker) {
+    #args: ExportArgs
+    #progress: Progress
+    constructor(node: TargetNode, worker: FFWorker, args: ExportArgs) {
         this.#node = node
         this.#exporter = new Exporter(node, worker)
+        this.#args = args
+        this.#progress = new Progress(this.#args.progress)
     }
     
     async build() {
@@ -182,8 +216,13 @@ class Target {
         // direct return if previous having previous outputs
         if (this.#outputs.length > 0) return this.#outputs.shift() as WriteDataBuffer
         if (this.#end) return
-        const {output, done} = await this.#exporter.next()
-        this.#end = done
+        const {output, progress, done} = await this.#exporter.next()
+        this.#progress.setProgress(progress)
+        if (done) {
+            this.#end = true
+            await this.close()
+        }
+        
         /* convert (DataBuffer | undefined)[] to DataBuffer */
         if (!output && !done) return await this.next()
         if (output) {
@@ -194,20 +233,21 @@ class Target {
 
     /* for await...of loop */
     [Symbol.asyncIterator]() {
-        const exporter = this
+        const target = this
         return {
             async next(): Promise<{value: WriteDataBuffer, done: boolean}> {
-                const output = await exporter.next()
+                const output = await target.next()
                 return {value: output ?? {data: new Uint8Array(), offset: 0}, done: !output}
             },
             async return(): Promise<{value: WriteDataBuffer, done: boolean}> { 
-                await exporter.close() 
+                await target.close() 
                 return { value: {data: new Uint8Array(), offset: 0}, done: true }
             }
         }
     }
 
     close() {
+        this.#progress.close()
         return this.#exporter.close()
     }
 }
@@ -217,17 +257,19 @@ interface MediaStreamArgs {
 }
 
 interface ExportArgs {
+    /* Target args */
     url?: string // export filename
     format?: string // specified video/audio/image container format
     audio?: MediaStreamArgs, // audio track configurations in video container
     video?: MediaStreamArgs // video track configurations in video container
+    /* Export args */
+    progress?: (pg: number) => void
 }
 
 async function createTargetNode(inStreams: StreamRef[], args: ExportArgs, worker: FFWorker): Promise<TargetNode> {
     const wasm = await loadWASM()
     // infer container format from url
     if (!args.format && !args.url) throw `must provide format name or url`
-    // todo... infer too slow ??
     const {format, video, audio} = await worker.send('inferFormatInfo',
         { format: args.format ?? '', url: args.url ?? '', wasm })
 

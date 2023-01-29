@@ -21,7 +21,7 @@ interface Messages {
     }
     nextFrame: {
         send: undefined,
-        reply: { outputs: {[nodeId in string]?: WriteDataBuffer[]}, endWriting: boolean}
+        reply: { outputs: {[nodeId in string]?: WriteDataBuffer[]}, endWriting: boolean, progress: number}
     }
     deleteGraph: {
         send: undefined

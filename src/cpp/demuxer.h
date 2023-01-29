@@ -16,48 +16,6 @@ extern "C" {
 using namespace emscripten;
 
 
-// Custom reading avio https://www.codeproject.com/Tips/489450/Creating-Custom-FFmpeg-IO-Context
-static int read_packet(void *opaque, uint8_t *buf, int buf_size)
-{
-    auto reader = *reinterpret_cast<val*>(opaque);
-    auto data = val(typed_memory_view(buf_size, buf));
-    auto read_size = reader.call<val>("read", data).await().as<int>();
-
-    if (!read_size)
-        return AVERROR_EOF;
-
-    return read_size;
-}
-
-/**
- * Warning: any function involve this call, will give promise (async).
- * Warning: enable asyncify will disable bigInt, so be careful that binding int64_t not allowed 
- */
-static int64_t seek_for_read(void* opaque, int64_t pos, int whence) {
-    auto reader = *reinterpret_cast<val*>(opaque);
-    auto size = reader["size"].as<int>();
-    switch (whence) {
-        case AVSEEK_SIZE:
-            return size;
-        case SEEK_SET:
-            if (pos >= size) return AVERROR_EOF;
-            reader.call<val>("seek", (int)pos).await(); break;
-        case SEEK_CUR:
-            pos += reader["offset"].as<int>();
-            if (pos >= size) return AVERROR_EOF;
-            reader.call<val>("seek", (int)pos).await(); break;
-        case SEEK_END:
-            if (pos >= size) return AVERROR_EOF;
-            pos = size - pos;
-            reader.call<val>("seek", (int)pos).await(); break;
-        default:
-            CHECK(false, "cannot process seek_for_read");
-    }
-    
-    return pos;
-}
-
-
 class Demuxer {
     AVFormatContext* format_ctx;
     AVIOContext* io_ctx;
@@ -70,47 +28,22 @@ public:
         format_ctx = avformat_alloc_context();
     }
     /* async */
-    void build(val _reader) {
-        reader = std::move(_reader); // reader will be destroyed at end of this function 
-        _url = reader["url"].as<std::string>();
-        auto buffer = (uint8_t*)av_malloc(buf_size);
-        auto readerPtr = reinterpret_cast<void*>(&reader);
-        if (reader["size"].as<int>() <= 0)
-            io_ctx = avio_alloc_context(buffer, buf_size, 0, readerPtr, &read_packet, NULL, NULL);
-        else
-            io_ctx = avio_alloc_context(buffer, buf_size, 0, readerPtr, &read_packet, NULL, &seek_for_read);
-        format_ctx->pb = io_ctx;
-        // open and get metadata
-        auto ret = avformat_open_input(&format_ctx, _url.c_str(), NULL, NULL);
-        CHECK(ret == 0, "Could not open input file.");
-        ret = avformat_find_stream_info(format_ctx, NULL);
-        CHECK(ret >= 0, "Could not open find stream info.");
-        // init currentStreamsPTS
-        for (int i = 0; i < format_ctx->nb_streams; i++) {
-            currentStreamsPTS.push_back(0);
-        }
-    }
+    void build(val _reader);
+
     ~Demuxer() { 
         avformat_close_input(&format_ctx);
         if (io_ctx)
             av_freep(&io_ctx->buffer);
         avio_context_free(&io_ctx);
     }
+    
     /* async */
     void seek(int64_t timestamp, int stream_index) {
         av_seek_frame(format_ctx, stream_index, timestamp, AVSEEK_FLAG_BACKWARD);
     }
+    
     /* async */
-    Packet* read() {
-        auto pkt = new Packet();
-        auto ret = av_read_frame(format_ctx, pkt->av_packet());
-        // update current stream pts
-        auto av_pkt = pkt->av_packet();
-        const auto& time_base = format_ctx->streams[pkt->stream_index()]->time_base;
-        auto next_pts = av_pkt->pts + av_pkt->duration;
-        currentStreamsPTS[pkt->stream_index()] = next_pts * (double)time_base.num / time_base.den;
-        return pkt;
-    }
+    Packet* read();
 
     void dump() {
         av_dump_format(format_ctx, 0, _url.c_str(), 0);

@@ -329,8 +329,11 @@ function buildFiltersGraph(graphConfig: FilterGraph, nodes: GraphConfig['nodes']
     
     // delete frames
     Object.values(frames).forEach(f => f?.delete())
+
+    // current progress
+    const progress = graph.sources.reduce((pg, s) => Math.min(s.reader.progress, pg), Infinity)
     
-    return {outputs, endWriting}
+    return {outputs, progress, endWriting}
 }
 
 /**
@@ -348,6 +351,7 @@ class VideoSourceReader {
     module: FFmpegModule
     decoders: {[streamIndex in number]?: ModuleType['Decoder']} = {}
     #inputIO?: InputIO
+    #endOfPacket = false
     
     constructor(node: SourceConfig, module: FFmpegModule) {
         this.node = node
@@ -367,7 +371,7 @@ class VideoSourceReader {
         })
     }
 
-    get inputEnd() { return this.#inputIO?.end }
+    get inputEnd() { return this.#inputIO?.end || this.#endOfPacket }
 
     /* smallest currentTime among all streams */
     get currentTime() {
@@ -376,8 +380,19 @@ class VideoSourceReader {
         }, Infinity)
     }
 
+    get progress() {
+        const time = this.currentTime
+        if (this.node.format.type == 'file') {
+            return time / this.node.format.container.duration
+        }
+        return 0
+    }
+
     async readFrames(): Promise<Frames> {
         const pkt = await this.demuxer.read()
+        if (pkt.size == 0) 
+            this.#endOfPacket = true
+        pkt.streamIndex == 1 && pkt.dump()
         const decoder = this.decoders[pkt.streamIndex]
         if (!decoder) throw `not found the decorder of source reader`
         const frameVec = this.inputEnd && pkt.size == 0 ? decoder.flush() : decoder.decode(pkt)
@@ -420,6 +435,8 @@ class ImageSourceReader {
     get inputEnd() { return this.#inputEnd }
 
     get currentTime() { throw `not implemented yet` }
+    
+    get progress() { return 0 }
 
     async readFrames(): Promise<Frames> {
         const image = await this.#inputIO.readImage()
