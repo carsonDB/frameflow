@@ -1,63 +1,94 @@
 import { buildGraphConfig } from './graph'
 import { loadWASM } from './loader'
 import { FFWorker } from "./message"
-import { SourceType, StreamRef, TargetNode, DataBuffer, WriteDataBuffer } from "./types/graph"
+import { DataBuffer, SourceType, TargetNode, WriteDataBuffer } from "./types/graph"
 import { isBrowser, isNode } from './utils'
 
 
 export type SourceStream = ReadableStream<DataBuffer> | NodeJS.ReadableStream
 type SourceStreamReader = ReadableStreamDefaultReader<DataBuffer> | NodeJS.ReadableStream
-type SourceStreamCreator = (seekPos: number) => Promise<{stream: SourceStream, size: number, url?: string}>
+type SourceStreamCreator = (seekPos: number) => Promise<SourceStream>
 
-async function fetchSource(url: string | URL, startPos: number): Promise<{stream: SourceStream, size: number, url: string}> {
-    // todo... seekPos
-    const { body, headers } = await fetch(url)
+
+async function fetchSourceInfo(url: string | URL): Promise<{size: number, url: string}> {
     const urlStr = typeof url == 'string' ? url : url.href
-    if (!body) throw `cannot fetch source url: ${url}`
-    return { stream: body, size: parseInt(headers.get('content-length') ?? '0'), url: urlStr }
+    const { headers } = await fetch(url, { method: "HEAD" })
+    // if (!headers.get('Accept-Ranges')?.includes('bytes')) throw `cannot accept range fetch`
+    // todo... check if accept-ranges
+    return { size: parseInt(headers.get('Content-Length') ?? '0'), url: urlStr }
 }
 
-const sourceToStreamCreator = (src: SourceType): SourceStreamCreator => async (seekPos: number) => {
-    // convert any quanlified src into creator of readableStream<DataBuffer>
+
+async function getSourceInfo(src: SourceType): Promise<{size: number, url?: string}> {
     if (typeof src == 'string') {
         if (isNode) {
             try {
-                const url = new URL(src) // valid url
-                return await fetchSource(url, seekPos)
+                return await fetchSourceInfo(new URL(src)) // URL is used to valid url string
             } catch {
                 // check if local file exits
-                const { createReadStream, stats } = require('fs').promises
-                return {
-                    url: src,
-                    stream: createReadStream(src) as NodeJS.ReadStream, 
-                    size: (await stats(src)).size 
-                }
+                const { stats } = require('fs').promises
+                return { url: src, size: (await stats(src)).size }
             }    
         }
         else if (isBrowser) {
-            return await fetchSource(src, seekPos)
+            return await fetchSourceInfo(src)
         }
     }
     else if (src instanceof URL) {
-        return await fetchSource(src, seekPos)
+        return await fetchSourceInfo(src)
     }
     else if (src instanceof Blob) {
-        const url = src instanceof File ? src.name : ''
-        return { stream: src.slice(seekPos).stream(), size: src.size, url }
+        return { size: src.size, url: src instanceof File ? src.name : '' }
     }
-    else if (src instanceof ReadableStream) { // ignore seekPos
-        return { stream: src, size: 0}
+    else if (src instanceof ReadableStream) {
+        return { size: 0}
     }
     else if (src instanceof ArrayBuffer || (isNode && src instanceof Buffer)) {
-        return {
-            stream: new ReadableStream({ 
+        return { size: src.byteLength }
+    }
+
+    throw `cannot read source: "${src}", type: "${typeof src}, as stream input."`
+}
+
+
+async function fetchSourceData(url: string | URL, startPos: number): Promise<SourceStream> {
+    const { body, headers } = await fetch(url, { headers: { range: `bytes=${startPos}-` } })
+    if (!body) throw `cannot fetch source url: ${url}`
+    return body
+}
+
+/* convert any quanlified src into creator of readableStream<DataBuffer> */
+const sourceToStreamCreator = (src: SourceType): SourceStreamCreator => async (seekPos: number) => {
+    if (typeof src == 'string') {
+        if (isNode) {
+            try {
+                return await fetchSourceData(new URL(src), seekPos) // valid url
+            } catch {
+                // check if local file exits
+                const { createReadStream } = require('fs').promises
+                return createReadStream(src) as NodeJS.ReadStream
+            }    
+        }
+        else if (isBrowser) {
+            return await fetchSourceData(src, seekPos)
+        }
+    }
+    else if (src instanceof URL) {
+        return await fetchSourceData(src, seekPos)
+    }
+    else if (src instanceof Blob) {
+        return src.slice(seekPos).stream()
+    }
+    else if (src instanceof ReadableStream) { // ignore seekPos
+        return src
+    }
+    else if (src instanceof ArrayBuffer || (isNode && src instanceof Buffer)) {
+        return new ReadableStream({ 
                 start(s) { 
                     s.enqueue(new Uint8Array(src.slice(seekPos))) 
                     s.close()
                 }
-            }),
-            size: src.byteLength
-        }
+            })
     }
 
     throw `cannot read source: "${src}", type: "${typeof src}, as stream input."`
@@ -68,6 +99,7 @@ const sourceToStreamCreator = (src: SourceType): SourceStreamCreator => async (s
 export class Reader {
     #id: string
     #url = '' // todo.. send empty name
+    source: SourceType
     streamCreator: SourceStreamCreator
     stream: SourceStream | undefined = undefined
     reader: SourceStreamReader | undefined = undefined
@@ -81,10 +113,14 @@ export class Reader {
         this.#id = id
         this.worker = worker
         this.streamCreator = sourceToStreamCreator(source)
+        this.source = source
         this.#enableReply()
     }
 
     async build() {
+        const {size, url} = await getSourceInfo(this.source)
+        this.#url = url ?? ""
+        this.fullSize = size
         await this.createStream(0)
     }
     
@@ -111,10 +147,8 @@ export class Reader {
     get url() { return this.#url ?? '' }
     
     async createStream(seekPos: number) {
-        const {stream, size, url} = await this.streamCreator(seekPos)
-        this.#url = url ?? ""
+        const stream = await this.streamCreator(seekPos)
         this.stream = stream
-        this.fullSize = size
         if ('getReader' in stream)
             this.reader = stream.getReader()
         else {

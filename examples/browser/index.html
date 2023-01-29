@@ -4,46 +4,54 @@
 <head>
     <meta charset="utf-8">
     <title>frameflow dev</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
 </head>
 
 <body>
-    <h1>Fetch: local examples/assets/flame.avi</h1>
-    <video id="input-video" controls src="./assets/flame.avi"></video><br />
-    <h1>Upload video</h1>
-    <video id="output-video" controls></video><br />
-    <input id="uploader" type="file" />
-    <button id="metadata">Metadata</button>
-    <button id="transcode">Transcode</button>
-    <span id="progress"></span>
     <script>
+        /**
+         * Rename frameflow to fflow. Just like: ES6 import (optional)
+         * import fflow from 'frameflow'
+         */
         window.onload = () => window.fflow = frameflow
+    </script>
+
+
+    <h1>👉Fetch and get metadata</h1>
+    <button id="metadata">Metadata</button>
+    <script>
+        document.getElementById('metadata').onclick = async () => {
+            const src = await fflow.source("./assets/flame.avi")
+            console.log('Metadata:', src.metadata)
+        }
+    </script>
+
+
+    <h1>👉Trancode</h1>
+    <video id="transcode-video" controls src="./assets/flame.avi"></video><br />
+    <button id="transcode">Transcode</button>
+    <span id="transcode-progress"></span>
+    <script>
+        document.getElementById('transcode').onclick = async () => {
+            const onProgress = pg => document.getElementById('transcode-progress').textContent = `${(pg*100).toFixed(2)}%`
+            const src = await fflow.source('./assets/flame.avi')
+            const blob = await src.exportTo(Blob, {format: 'mp4', progress: onProgress}) 
+            document.getElementById('transcode-video').src = URL.createObjectURL(blob)
+        }
+    </script>
+
+
+    <h1>👉Upload video (testing...) </h1>
+    <input id="uploader" type="file" />
+    <script>
         let video = null
         const fileDom = document.getElementById('uploader')
         fileDom.onchange = (e) => video = e.target.files[0]
-
-        document.getElementById('metadata').onclick = async () => {
-            const src = await fflow.source(video)
-            console.log('Metadata:', src.metadata)
-        }
         
         document.getElementById('transcode').onclick = async () => {
-            const src = await fflow.source(video)
-            const output = src.tracks()[1]
-            const blob = await output.exportTo(Blob, {format: 'avi', 
-                 progress: pg => document.getElementById('progress').textContent = `${(pg*100).toFixed(2)}%`})
-            const blobUrl = URL.createObjectURL(blob)
-            document.getElementById('output-video').src = blobUrl
-
-            let link = document.createElement("a"); // Or maybe get it from the current document
-            link.href = blobUrl;
-            link.download = "output video";
-            link.innerHTML = "Click to download";
-            document.body.appendChild(link); // Or append it whereever you want
-            
-            // const stream = await src.export({ format: 'mp4' })
-            // for await (let {data, offset} of stream)
-            //     console.log(`Chunk: ${data.byteLength}, offset ${offset}`)
+            const onProgress = pg => document.getElementById('transcode-progress').textContent = `${(pg*100).toFixed(2)}%`
+            const src = await fflow.source('./assets/flame.avi')
+            const blob = await src.exportTo(Blob, {format: 'mp4', progress: onProgress}) 
+            document.getElementById('transcode-video').src = URL.createObjectURL(blob)
         }
     </script>
 </body>
