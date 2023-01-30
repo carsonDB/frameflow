@@ -3,7 +3,7 @@ import { AudioStreamMetadata, FilterNode, StreamMetadata, StreamRef } from "./ty
 export type FilterArgs<T extends Filter['type']> = Extract<Filter, { type: T, args: any }>['args']
 export type Filter = 
     { type: 'tracks', args: 'video' | 'audio' } |
-    { type: 'trim', args: { startTime: number, duration: number } } |
+    { type: 'trim', args: { start: number, duration: number } } |
     { type: 'loop', args: number } |
     { type: 'volume', args: number } |
     { type: 'merge' } | // implicit args: {number of inputs}
@@ -65,13 +65,13 @@ export function applySingleFilter(streamRefs: StreamRef[], filter: Filter): Stre
         const s = streamRef.from.outStreams[streamRef.index]
         switch (filter.type) {
             case 'trim': {
-                const {startTime, duration} = filter.args
+                const {start, duration} = filter.args
                 const name = s.mediaType == 'audio' ? 'atrim' : 'trim'
-                if (startTime < s.startTime || duration > s.duration)
+                if (start < s.startTime || (start + duration) > s.duration)
                     throw 'trim range (absolute) has exceeded input range'
                 const from: FilterNode = {
-                    type: 'filter', filter: {name, ffmpegArgs: {start: startTime, duration}}, 
-                    inStreams: [streamRef], outStreams: [{...s, startTime, duration}] }
+                    type: 'filter', filter: {name, ffmpegArgs: {start, duration}}, 
+                    inStreams: [streamRef], outStreams: [{...s, startTime: start, duration}] }
                 return {from, index: 0}
             }
             case 'loop': {

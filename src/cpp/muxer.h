@@ -55,12 +55,13 @@ public:
         av_dump_format(format_ctx, 0, "", 1);
     }
     
-    void newStream(Encoder* encoder) {
+    void newStream(Encoder* encoder, AVRational time_base) {
         /* Some formats want stream headers to be separate. */
         if (format_ctx->oformat->flags & AVFMT_GLOBALHEADER)
             encoder->setFlags(AV_CODEC_FLAG_GLOBAL_HEADER);
 
         streams.push_back(new Stream(format_ctx, encoder));
+        streams.back()->av_stream_ptr()->time_base = time_base;
         from_time_bases.push_back(encoder->av_codecContext_ptr()->time_base);     
     }
 

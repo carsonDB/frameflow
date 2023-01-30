@@ -136,7 +136,7 @@ class Muxer {
     constructor(formatName: string, writer: WriterForMuxer)
     static inferFormatInfo(format: string, filename: string): InferredFormatInfo
     dump(): void
-    newStream(encoder: Encoder): void
+    newStream(encoder: Encoder, time_base): void
     // openIO(): void
     writeHeader(): void
     writeTrailer(): void

@@ -40,18 +40,36 @@
     </script>
 
 
+    <h1>👉Filter: trim</h1>
+    <video id="trim-video" controls></video><br />
+    <button id="trim">Trim</button>
+    <span id="trim-progress"></span>
+    <script>
+        document.getElementById('trim').onclick = async () => {
+            const onProgress = pg => document.getElementById('trim-progress').textContent = `${(pg*100).toFixed(2)}%`
+            const src = await fflow.source('./assets/flame.avi')
+            const trimSrc = src.trim({start: 1, duration: 1})
+            const blob = await trimSrc.exportTo(Blob, {format: 'mp4', progress: onProgress}) 
+            document.getElementById('trim-video').src = URL.createObjectURL(blob)
+        }
+    </script>
+
+
     <h1>👉Upload video (testing...) </h1>
     <input id="uploader" type="file" />
+    <button id="test-transcode">Transcode</button>
+    <span id="test-progress"></span>
     <script>
         let video = null
         const fileDom = document.getElementById('uploader')
         fileDom.onchange = (e) => video = e.target.files[0]
         
-        document.getElementById('transcode').onclick = async () => {
-            const onProgress = pg => document.getElementById('transcode-progress').textContent = `${(pg*100).toFixed(2)}%`
-            const src = await fflow.source('./assets/flame.avi')
-            const blob = await src.exportTo(Blob, {format: 'mp4', progress: onProgress}) 
-            document.getElementById('transcode-video').src = URL.createObjectURL(blob)
+        document.getElementById('test-transcode').onclick = async () => {
+            const onProgress = pg => document.getElementById('test-progress').textContent = `${(pg*100).toFixed(2)}%`
+            const src = await fflow.source(video)
+            console.log('Metadata:', src.metadata)
+            const blob = await src.filter('video').exportTo(Blob, {format: 'avi', progress: onProgress}) 
+            console.log(blob)
         }
     </script>
 </body>

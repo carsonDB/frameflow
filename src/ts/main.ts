@@ -216,7 +216,7 @@ class Target {
         // direct return if previous having previous outputs
         if (this.#outputs.length > 0) return this.#outputs.shift() as WriteDataBuffer
         if (this.#end) return
-        const {output, progress, done} = await this.#exporter.next()
+        const {output, done, progress} = await this.#exporter.next()
         this.#progress.setProgress(progress)
         if (done) {
             this.#end = true

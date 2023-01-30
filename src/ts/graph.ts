@@ -59,6 +59,8 @@ export function buildGraphConfig(target: TargetNode): [GraphConfig, Map<UserNode
         }
 
     })
+    // reverse filters
+    filterConfig.filters.reverse()
 
     const graphConfig = {
         nodes: configNodes,

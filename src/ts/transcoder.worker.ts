@@ -186,16 +186,13 @@ async function buildGraph(graphConfig: GraphConfig, ffmpeg: FFmpegModule): Promi
     const targets: GraphRuntime['targets'] = []
     const { filterConfig, nodes } = graphConfig
 
-    // get common timeBase (higher resolution) of all timeBases of sources' streams
-    const commonTimeBase = findCommonTimeBase(graphConfig)
-
     // build input nodes
     for (const id of graphConfig.sources) {
         const source = nodes[id]
         if (source?.type !== 'source') continue
         if (source.format.type == 'file') {
             const reader = new VideoSourceReader(source, ffmpeg)
-            await reader.build(commonTimeBase)
+            await reader.build()
             sources.push({ type: 'file', reader, config: source })
         }
         else {
@@ -217,7 +214,7 @@ async function buildGraph(graphConfig: GraphConfig, ffmpeg: FFmpegModule): Promi
         const target = graphConfig.nodes[id]
         if (target?.type != 'target') return
         if (target.format.type == 'video') {
-            const writer = new VideoTargetWriter(target, ffmpeg, commonTimeBase)
+            const writer = new VideoTargetWriter(target, ffmpeg)
             targets.push({ type: 'file', config: target, writer })
         }
         else if (target.format.type == 'image') {
@@ -229,20 +226,6 @@ async function buildGraph(graphConfig: GraphConfig, ffmpeg: FFmpegModule): Promi
     return { sources, filterers, targets, ffmpeg }
 }
 
-/* All encoders and decoders should have same common timeBase, which currently is the smallest timeBase */
-function findCommonTimeBase(graphConfig: GraphConfig) {
-    let timeBase = {num: 1, den: 1}
-    for (const id of graphConfig.sources) {
-        const source = graphConfig.nodes[id]
-        if (source?.type !== 'source') continue
-        for (const {timeBase: {num, den}} of source.outStreams) {
-            // time scale compare
-            timeBase = ((den / num) > (timeBase.den / timeBase.num)) ? {num, den} : timeBase
-        }
-    }
-
-    return timeBase
-}
 
 /**
  * A filter is represented by a string of the form: [in_link_1]...[in_link_N]filter_name=arguments[out_link_1]...[out_link_M]
@@ -277,20 +260,22 @@ function buildFiltersGraph(graphConfig: FilterGraph, nodes: GraphConfig['nodes']
         const outputs = node.outStreams.map((_, i) => `[${id}:${i}]`).join('')
         const filterArgs = Object.entries(node.filter.ffmpegArgs)
         const args = filterArgs.length > 0 ? 
-            ('=' + filterArgs.map(([k, v]) => v ? `${k}=${v}` : '').join(':')) : ''
+            ('=' + filterArgs.map(([k, v]) => v != undefined ? `${k}=${v}` : '').join(':')) : ''
         return `${inputs}${node.filter.name}${args}${outputs}`
     }).join(';')
 
     // build filter_grpah given spec
     const src2args = module.createStringStringMap()
-    inputs.forEach(ref => 
-        src2args.set(streamId(ref.from, ref.index), buffersrcArgs(getStream(ref))))
+    inputs.forEach(ref => src2args.set(streamId(ref.from, ref.index), buffersrcArgs(getStream(ref))))
+
     const sink2args = module.createStringStringMap()
     outputs.forEach(ref => sink2args.set(streamId(ref.from, ref.index), ''))
+    
     // both src and sink media type
     const mediaTypes = module.createStringStringMap()
     inputs.concat(outputs).forEach(ref => 
         mediaTypes.set(streamId(ref.from, ref.index), getStream(ref).mediaType))
+    
     const filterer = new module.Filterer(src2args, sink2args, mediaTypes, filterSpec)
 
     return filterer
@@ -360,14 +345,13 @@ class VideoSourceReader {
     }
     
     /* demuxer need async build, so decoders must be created later */
-    async build(decorderTimeBase: Rational) {
+    async build() {
         const url = this.node.url ?? ''
         const fileSize = this.node.format.type == 'file' ? this.node.format.fileSize : 0
         this.#inputIO = new InputIO(this.node.id, url, fileSize)
         await this.demuxer.build(this.#inputIO)
         this.node.outStreams.forEach((s, i) => {
             this.decoders[s.index] = new this.module.Decoder(this.demuxer, s.index, streamId(this.node.id, i))
-            this.decoders[s.index]?.setTimeBase(decorderTimeBase)
         })
     }
 
@@ -392,7 +376,6 @@ class VideoSourceReader {
         const pkt = await this.demuxer.read()
         if (pkt.size == 0) 
             this.#endOfPacket = true
-        pkt.streamIndex == 1 && pkt.dump()
         const decoder = this.decoders[pkt.streamIndex]
         if (!decoder) throw `not found the decorder of source reader`
         const frameVec = this.inputEnd && pkt.size == 0 ? decoder.flush() : decoder.decode(pkt)
@@ -428,7 +411,7 @@ class ImageSourceReader {
         this.#inputIO = new InputIO(node.id)
         const stream = node.outStreams[0]
         const params = `codec_name:${stream.codecName};height:${stream.height};width:${stream.width}`
-        this.decoder = new ffmpeg.Decoder(params, streamId(this.node.id, 0)) // todo... common timeBase
+        this.decoder = new ffmpeg.Decoder(params, streamId(this.node.id, 0))
         this.Packet = ffmpeg.Packet
     }
 
@@ -467,17 +450,17 @@ class VideoTargetWriter {
     #outputIO: OutputIO
     firstWrite = false
     
-    constructor(node: TargetConfig, ffmpeg: FFmpegModule, encoderTimeBase: Rational) {
+    constructor(node: TargetConfig, ffmpeg: FFmpegModule) {
         this.node = node
         this.#outputIO = new OutputIO()
         this.muxer = new ffmpeg.Muxer(node.format.container.formatName, this.#outputIO)
         node.outStreams.forEach((s, i) => {
             const encoder = new ffmpeg.Encoder(streamMetadataToInfo(s))
-            encoder.setTimeBase(encoderTimeBase)
             const {from, index} = node.inStreams[i]
             // use inStream ref
             this.encoders[streamId(from, index)] = encoder
-            this.muxer.newStream(encoder)
+            const timeBase = s.mediaType == 'audio' ? {num: 1, den: s.sampleRate} : {num: 1, den: s.frameRate}
+            this.muxer.newStream(encoder, timeBase)
             this.targetStreamIndexes[streamId(from, index)] = i
         })
     }
@@ -533,7 +516,7 @@ class ImageTargetWriter {
         this.node = node
         if (node.outStreams.length != 1 || node.outStreams[0].mediaType != 'video')
             throw `image writer only allow one video stream`
-        this.encoder = new ffmpeg.Encoder(streamMetadataToInfo(node.outStreams[0])) // todo... common timebase
+        this.encoder = new ffmpeg.Encoder(streamMetadataToInfo(node.outStreams[0]))
     }
 
     #pktVec2outputs(pktVec: StdVector<Packet>) {
