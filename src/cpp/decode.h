@@ -19,7 +19,7 @@ class Decoder {
     std::string _name;
     AVRational from_time_base = {0, 1};
 public:
-    Decoder(Demuxer& demuxer, int stream_index, std::string name);
+    Decoder(Demuxer* demuxer, int stream_index, std::string name);
     Decoder(string codec_name, std::string name);
     ~Decoder() { avcodec_free_context(&codec_ctx); };
     std::string name() const { return _name; }

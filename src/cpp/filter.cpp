@@ -84,6 +84,7 @@ vector<Frame*> Filterer::filter(vector<Frame*> frames) {
                     break;
                 }
                 CHECK(ret >= 0, "error get filtered frames from buffersink");
+                out_frame->av_ptr()->pict_type = AV_PICTURE_TYPE_NONE;
                 out_frames.push_back(out_frame);
             }
         }

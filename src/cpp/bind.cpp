@@ -56,7 +56,7 @@ EMSCRIPTEN_BINDINGS(demuxer) {
 
 EMSCRIPTEN_BINDINGS(decode) {
     class_<Decoder>("Decoder")
-        .constructor<Demuxer&, int, std::string>()
+        .constructor<Demuxer*, int, std::string>(allow_raw_pointers())
         .constructor<std::string, std::string>()
         .property("name", &Decoder::name)
         .function("setTimeBase", &Decoder::setTimeBase)

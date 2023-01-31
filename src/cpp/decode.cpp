@@ -1,14 +1,15 @@
 #include "decode.h"
 
 
-Decoder::Decoder(Demuxer& demuxer, int stream_index, string name) {
+Decoder::Decoder(Demuxer* demuxer, int stream_index, string name) {
     this->_name = name;
-    auto stream = demuxer.av_stream(stream_index);
+    auto stream = demuxer->av_stream(stream_index);
     auto codecpar = stream->codecpar;
     auto codec = avcodec_find_decoder(codecpar->codec_id);
     CHECK(codec != NULL, "Could not find input codec");
     codec_ctx = avcodec_alloc_context3(codec);
     avcodec_parameters_to_context(codec_ctx, codecpar);
+    codec_ctx->framerate = av_guess_frame_rate(demuxer->av_format_context(), stream, NULL);
     avcodec_open2(codec_ctx, codec, NULL);
     // from stream time base
     this->from_time_base = stream->time_base;

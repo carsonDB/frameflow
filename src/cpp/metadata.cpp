@@ -6,7 +6,7 @@ inline double toSeconds(int64_t time_ts, AVRational& time_base) {
         time_ts * (double)time_base.num / time_base.den : 0;
 }
 
-StreamInfo createStreamInfo(AVStream* s) {
+StreamInfo createStreamInfo(AVFormatContext* format_ctx, AVStream* s) {
     StreamInfo info;
     info.index = s->index;
     auto par = s->codecpar;
@@ -19,7 +19,7 @@ StreamInfo createStreamInfo(AVStream* s) {
         info.codec_type = "video";
         info.width = par->width;
         info.height = par->height;
-        info.frame_rate = av_q2d(s->avg_frame_rate);
+        info.frame_rate = av_q2d(av_guess_frame_rate(format_ctx, s, NULL));
         info.sample_aspect_ratio = s->sample_aspect_ratio;
         info.format = av_get_pix_fmt_name((AVPixelFormat)par->format);
     }
@@ -71,9 +71,9 @@ void set_avcodec_context_from_streamInfo(StreamInfo& info, AVCodecContext* ctx) 
     }
     else if (info.codec_type == "audio") {
         ctx->codec_type = AVMEDIA_TYPE_AUDIO;
-        ctx->channels = info.channels;
         ctx->sample_fmt = av_get_sample_fmt(info.format.c_str());
         ctx->channel_layout = av_get_channel_layout(info.channel_layout.c_str());
+        ctx->channels = av_get_channel_layout_nb_channels(ctx->channel_layout);
         // find proper sample_rate
         if (codec->supported_samplerates != NULL) {
             auto id = find_nearest_number(info.sample_rate, codec->supported_samplerates);
@@ -95,7 +95,7 @@ FormatInfo createFormatInfo(AVFormatContext* p) {
     for (int i = 0; i < p->nb_streams; i++) {
         auto codec_type = p->streams[i]->codecpar->codec_type;
         if (codec_type == AVMEDIA_TYPE_VIDEO || codec_type == AVMEDIA_TYPE_AUDIO)
-            info.streamInfos.push_back(createStreamInfo(p->streams[i]));
+            info.streamInfos.push_back(createStreamInfo(p, p->streams[i]));
     }
     
     return info;

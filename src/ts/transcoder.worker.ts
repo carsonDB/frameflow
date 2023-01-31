@@ -455,11 +455,11 @@ class VideoTargetWriter {
         this.#outputIO = new OutputIO()
         this.muxer = new ffmpeg.Muxer(node.format.container.formatName, this.#outputIO)
         node.outStreams.forEach((s, i) => {
-            const encoder = new ffmpeg.Encoder(streamMetadataToInfo(s))
+            const timeBase = s.mediaType == 'audio' ? {num: 1, den: s.sampleRate} : {num: 1, den: s.frameRate}
+            const encoder = new ffmpeg.Encoder({...streamMetadataToInfo(s), timeBase})
             const {from, index} = node.inStreams[i]
             // use inStream ref
             this.encoders[streamId(from, index)] = encoder
-            const timeBase = s.mediaType == 'audio' ? {num: 1, den: s.sampleRate} : {num: 1, den: s.frameRate}
             this.muxer.newStream(encoder, timeBase)
             this.targetStreamIndexes[streamId(from, index)] = i
         })
