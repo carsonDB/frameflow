@@ -69,9 +69,14 @@ export function applySingleFilter(streamRefs: StreamRef[], filter: Filter): Stre
                 const name = s.mediaType == 'audio' ? 'atrim' : 'trim'
                 if (start < s.startTime || (start + duration) > s.duration)
                     throw 'trim range (absolute) has exceeded input range'
-                const from: FilterNode = {
+                const trimNode: FilterNode = {
                     type: 'filter', filter: {name, ffmpegArgs: {start, duration}}, 
                     inStreams: [streamRef], outStreams: [{...s, startTime: start, duration}] }
+                // first frame of trimmed part, pts reset to 0
+                const name2 = s.mediaType == 'audio' ? 'asetpts' : 'setpts'
+                const from: FilterNode = {
+                    type: 'filter', filter: {name: name2, ffmpegArgs: 'PTS-STARTPTS'},
+                    inStreams: [{from: trimNode, index: 0}], outStreams: trimNode.outStreams }
                 return {from, index: 0}
             }
             case 'loop': {

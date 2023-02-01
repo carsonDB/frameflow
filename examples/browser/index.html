@@ -6,6 +6,7 @@
     <title>frameflow dev</title>
     <style>
         button {font-size: 1em}
+        video {height: 12em}
     </style>
 </head>
 
@@ -39,7 +40,7 @@
         document.getElementById('transcode').onclick = async () => {
             const onProgress = pg => document.getElementById('transcode-progress').textContent = `${(pg*100).toFixed(2)}%`
             const src = await fflow.source('./assets/flame.avi')
-            const blob = await src.exportTo(Blob, {format: 'mp4', progress: onProgress}) 
+            const blob = await src.filter('video').exportTo(Blob, {format: 'mp4', progress: onProgress}) 
             document.getElementById('transcode-video').src = URL.createObjectURL(blob)
         }
     </script>
@@ -61,20 +62,22 @@
 
 
     <h2>👉Hybrid: trim + transcode + mux</h2>
-    <video id="hybrid-video" controls></video><br />
+    <video id="mux-video" controls></video><br />
+    <audio id="mux-audio" controls src="./assets/audio.mp3" ></audio>
     <button id="mux">Mux</button>
     <span id="mux-progress"></span>
     <script>
-        document.getElementById('trim').onclick = async () => {
-            const onProgress = pg => document.getElementById('trim-progress').textContent = `${(pg*100).toFixed(2)}%`
-            const src = await fflow.source('./assets/flame.avi')
-            const trimSrc = src.trim({start: 1, duration: 1})
-            const blob = await trimSrc.exportTo(Blob, {format: 'mp4', progress: onProgress}) 
-            document.getElementById('trim-video').src = URL.createObjectURL(blob)
+        document.getElementById('mux').onclick = async () => {
+            const onProgress = pg => document.getElementById('mux-progress').textContent = `${(pg*100).toFixed(2)}%`
+            const video = await fflow.source('./assets/flame.avi')
+            const audio = await fflow.source('./assets/audio.mp3')
+            const output = fflow.group([video, audio.trim({start: 2, duration: video.duration})])
+            const blob = await output.exportTo(Blob, {format: 'mp4', progress: onProgress}) 
+            document.getElementById('mux-video').src = URL.createObjectURL(blob)
         }
     </script>
 
-    <h2>👉Upload video (testing...) </h2>
+    <h2>👉Upload video (developing...) </h2>
     <video id="trim-video" controls></video><br />
     <input id="uploader" type="file" />
     <button id="test-transcode">Transcode</button>
@@ -88,7 +91,7 @@
             const onProgress = pg => document.getElementById('test-progress').textContent = `${(pg*100).toFixed(2)}%`
             const src = await fflow.source(video)
             console.log('Metadata:', src.metadata)
-            const blob = await src.filter('audio').tracks()[0].exportTo(Blob, {format: 'avi', progress: onProgress}) 
+            const blob = await src.filter('video').tracks()[0].exportTo(Blob, {format: 'avi', progress: onProgress}) 
             
             const link = document.createElement('a')
             link.href = URL.createObjectURL(blob)

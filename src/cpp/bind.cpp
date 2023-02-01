@@ -49,6 +49,7 @@ EMSCRIPTEN_BINDINGS(demuxer) {
         .function("seek", &Demuxer::seek)
         .function("read", &Demuxer::read, allow_raw_pointers())
         .function("dump", &Demuxer::dump)
+        .function("getTimeBase", &Demuxer::getTimeBase)
         .function("getMetadata", &Demuxer::getMetadata)
         .function("currentTime", &Demuxer::currentTime)
     ;
@@ -59,7 +60,7 @@ EMSCRIPTEN_BINDINGS(decode) {
         .constructor<Demuxer*, int, std::string>(allow_raw_pointers())
         .constructor<std::string, std::string>()
         .property("name", &Decoder::name)
-        .function("setTimeBase", &Decoder::setTimeBase)
+        .property("timeBase", &Decoder::timeBase)
         .function("decode", &Decoder::decode, allow_raw_pointers())
         .function("flush", &Decoder::flush, allow_raw_pointers())
     ;
@@ -102,7 +103,7 @@ EMSCRIPTEN_BINDINGS(encode) {
     
     class_<Encoder>("Encoder")
         .constructor<StreamInfo>()
-        .function("setTimeBase", &Encoder::setTimeBase)
+        .property("timeBase", &Encoder::timeBase)
         .function("encode", &Encoder::encode, allow_raw_pointers())
         .function("flush", &Encoder::flush, allow_raw_pointers())
     ;

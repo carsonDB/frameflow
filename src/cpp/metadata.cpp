@@ -77,7 +77,6 @@ void set_avcodec_context_from_streamInfo(StreamInfo& info, AVCodecContext* ctx) 
         // find proper sample_rate
         if (codec->supported_samplerates != NULL) {
             auto id = find_nearest_number(info.sample_rate, codec->supported_samplerates);
-            // printf("sample_rate %d\n", codec->supported_samplerates[id]);
             ctx->sample_rate = codec->supported_samplerates[id];
         }
         else

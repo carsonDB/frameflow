@@ -63,7 +63,7 @@ export interface SourceNode {
 
 interface FilterNode {
     type: 'filter', inStreams: StreamRef[], outStreams: StreamMetadata[], 
-    filter: { name: string, ffmpegArgs: {[k in string]?: string | number} }
+    filter: { name: string, ffmpegArgs: string | {[k in string]?: string | number} }
 }
 
 interface TargetNode {

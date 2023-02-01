@@ -139,9 +139,13 @@ export class SourceTrackGroup extends TrackGroup {
         if (this.node.format.type == 'file') {
             return {
                 ...this.node.format.container, 
-                streams: this.node.outStreams
+                tracks: this.node.outStreams
             }
         }
+    }
+
+    get duration() {
+        return this.node.format.type == 'file' ? this.node.format.container.duration : 0
     }
 
 }

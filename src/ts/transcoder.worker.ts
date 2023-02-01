@@ -47,14 +47,17 @@ interface GraphRuntime {
     ffmpeg: FFmpegModule
 }
 let graph: GraphRuntime | null = null
+const TimeBases: {frame: {[k in string]?: Rational}, packet: {[k in string]?: Rational}} = {frame: {}, packet: {}}
 
 
 // initiantate wasm module
 async function loadModule(wasmBinary: ArrayBuffer) {
+    // console.time('loadModule')
     const ffmpeg: FFmpegModule = await createModule({
         // Module callback functions: https://emscripten.org/docs/api_reference/module.html
         wasmBinary
     })
+    // console.timeEnd('loadModule')
     ffmpeg.setConsoleLogger(false)
 
     return ffmpeg
@@ -239,13 +242,15 @@ function buildFiltersGraph(graphConfig: FilterGraph, nodes: GraphConfig['nodes']
         return node.outStreams[index]
     }
 
-    const buffersrcArgs = (s: StreamMetadata, keyValSep='=', pairsSep=':') => {
+    const buffersrcArgs = (id: string, s: StreamMetadata, keyValSep='=', pairsSep=':') => {
+        const timeBase = TimeBases.frame[id]
+        if (!timeBase) throw `filter buffersrc cannot find timeBase`
         const streamInfo: {[k: string]: number | string} = s.mediaType == 'video' ? {
             width: s.width, height: s.height, pix_fmt: s.pixelFormat, 
-            time_base: `${s.timeBase.num}/${s.timeBase.den}`,
+            time_base: `${timeBase.num}/${timeBase.den}`,
             pixel_aspect: `${s.sampleAspectRatio.num}/${s.sampleAspectRatio.den}`
         } : {
-            time_base: `${s.timeBase.num}/${s.timeBase.den}`,
+            time_base: `${timeBase.num}/${timeBase.den}`,
             sample_rate: s.sampleRate, sample_fmt: s.sampleFormat,
             channel_layout: s.channelLayout
         }
@@ -258,15 +263,25 @@ function buildFiltersGraph(graphConfig: FilterGraph, nodes: GraphConfig['nodes']
         if (node?.type != 'filter') return ``
         const inputs = node.inStreams.map(({from, index}) => `[${from}:${index}]`).join('')
         const outputs = node.outStreams.map((_, i) => `[${id}:${i}]`).join('')
-        const filterArgs = Object.entries(node.filter.ffmpegArgs)
-        const args = filterArgs.length > 0 ? 
-            ('=' + filterArgs.map(([k, v]) => v != undefined ? `${k}=${v}` : '').join(':')) : ''
+        let args = ''
+        if (typeof node.filter.ffmpegArgs == 'string') {
+            args = node.filter.ffmpegArgs
+        }
+        else {
+            const filterArgs = Object.entries(node.filter.ffmpegArgs)
+            args = filterArgs.map(([k, v]) => v != undefined ? `${k}=${v}` : '').join(':')
+        }
+        args = args.length > 0 ? ('=' + args) : args
+        
         return `${inputs}${node.filter.name}${args}${outputs}`
     }).join(';')
 
     // build filter_grpah given spec
     const src2args = module.createStringStringMap()
-    inputs.forEach(ref => src2args.set(streamId(ref.from, ref.index), buffersrcArgs(getStream(ref))))
+    inputs.forEach(ref => {
+        const id = streamId(ref.from, ref.index)
+        src2args.set(id, buffersrcArgs(id, getStream(ref)))
+    })
 
     const sink2args = module.createStringStringMap()
     outputs.forEach(ref => sink2args.set(streamId(ref.from, ref.index), ''))
@@ -278,6 +293,8 @@ function buildFiltersGraph(graphConfig: FilterGraph, nodes: GraphConfig['nodes']
     
     const filterer = new module.Filterer(src2args, sink2args, mediaTypes, filterSpec)
 
+    // from 
+
     return filterer
 }
 
@@ -286,7 +303,7 @@ function buildFiltersGraph(graphConfig: FilterGraph, nodes: GraphConfig['nodes']
  * processing one frame as a step
  */
  async function executeStep(graph: GraphRuntime) {
-     
+
     // find the smallest timestamp source stream and read packet
     const {reader} = graph.sources.reduce((acc, {reader}) => {
         const currentTime = reader.currentTime
@@ -351,7 +368,11 @@ class VideoSourceReader {
         this.#inputIO = new InputIO(this.node.id, url, fileSize)
         await this.demuxer.build(this.#inputIO)
         this.node.outStreams.forEach((s, i) => {
-            this.decoders[s.index] = new this.module.Decoder(this.demuxer, s.index, streamId(this.node.id, i))
+            const id = streamId(this.node.id, i)
+            TimeBases.packet[id] = this.demuxer.getTimeBase(s.index)
+            const decoder = new this.module.Decoder(this.demuxer, s.index, id)
+            TimeBases.frame[id] = decoder.timeBase
+            this.decoders[s.index] = decoder
         })
     }
 
@@ -455,13 +476,17 @@ class VideoTargetWriter {
         this.#outputIO = new OutputIO()
         this.muxer = new ffmpeg.Muxer(node.format.container.formatName, this.#outputIO)
         node.outStreams.forEach((s, i) => {
-            const timeBase = s.mediaType == 'audio' ? {num: 1, den: s.sampleRate} : {num: 1, den: s.frameRate}
-            const encoder = new ffmpeg.Encoder({...streamMetadataToInfo(s), timeBase})
             const {from, index} = node.inStreams[i]
+            const id = streamId(from, index)
+            // const encoderTimeBase = TimeBases.frame[id]
+            // if (!encoderTimeBase) throw `encoder cannot find timeBase`
+            // const encoder = new ffmpeg.Encoder({...streamMetadataToInfo(s), timeBase: encoderTimeBase})
+            const encoder = new ffmpeg.Encoder({...streamMetadataToInfo(s)}) // todo... timeBase from encoder
             // use inStream ref
-            this.encoders[streamId(from, index)] = encoder
-            this.muxer.newStream(encoder, timeBase)
-            this.targetStreamIndexes[streamId(from, index)] = i
+            this.encoders[id] = encoder
+            const timeBase = s.mediaType == 'audio' ? {num: 1, den: s.sampleRate} : {num: 1, den: s.frameRate}
+            this.muxer.newStream(encoder, timeBase) // todo... remove timeBase
+            this.targetStreamIndexes[id] = i
         })
     }
     

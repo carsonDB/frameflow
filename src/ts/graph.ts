@@ -10,7 +10,7 @@ import { GraphConfig, StreamRef, TargetNode, UserNode } from './types/graph'
  */
 export function buildGraphConfig(target: TargetNode): [GraphConfig, Map<UserNode, string>] {
     // make up graph
-    target = completeGraph(target)
+    target = completeGraph(target) // todo... remove data format conversion
 
     // add uuid for each UserNode, and build map<UserNode, id>
     const node2id = new Map<UserNode, string>()

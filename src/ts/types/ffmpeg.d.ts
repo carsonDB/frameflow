@@ -32,6 +32,7 @@ class Demuxer {
     build(reader: ReaderForDemuxer): Promise<void>
     seek(t: number, streamIndex: number): Promise<void>
     read(): Promise<Packet>
+    getTimeBase(streamIndex: number): AVRational
     getMetadata(): FormatInfo
     currentTime(streamIndex: number): number
     dump(): void
@@ -49,7 +50,7 @@ class Decoder {
     constructor(dexmuer: Demuxer, streamIndex: number, name: string)
     constructor(params: string, name: string)
     name: number
-    setTimeBase(timeBase: AVRational): void
+    get timeBase(): AVRational
     decode(packet: Packet): StdVector<Frame>
     flush(): StdVector<Frame>
     delete(): void
@@ -108,7 +109,7 @@ class Filterer {
 // encode
 class Encoder {
     constructor(params: StreamInfo)
-    setTimeBase(timeBase: AVRational): void
+    get timeBase(): AVRational
     encode(f: Frame): StdVector<Packet>
     flush(): StdVector<Packet>
     delete(): void

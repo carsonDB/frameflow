@@ -1,15 +1,16 @@
 # FrameFlow
-An audio/video stream processing library for **JavaScript** world, based on WebAssembly and FFmpeg (libav*).
+An audio/video **stream** processing library for **JavaScript** world, based on WebAssembly and FFmpeg (libav*).
+It directly uses low-level C API from libav* folders in FFmepg, wrapped with C++ and compiled as WebAssembly module. In other words, reimplements the I/O and control logic, to really fit into JavaScript world.
 
-It has three major advantages 👌:
-- Stream in/out, plug in as a pipeline. Thus, no video size limiation. 
+👌Thus, it has three major advantages:
+- Stream in/out, plug in as a pipeline. Thus, no video size limiation, and stream processing.
 For example, we can download, process and upload at the same time.
 - Processing speed can be controlled either automatically or manually.
-For example, export video to a canvas like playing the video.
+For example, export a video to a canvas as playing a video.
 - Use JavaScript chainable style to build filter graphs, which is both easy and flexible.
 
 ⚠️ Note: current verison is at **prototype** stage. Only web browser examples are tested.
-Nodejs hasn't tested yet.
+Nodejs hasn't been tested yet.
 And almost everything is under optimization. You words will shape the future of FrameFlow.
 
 ## Simple demo
@@ -71,18 +72,6 @@ TypeScript will give hints.
 let video = await fflow.source('./test.avi')
 ```
 
-### Tracks
-Usually, we can directly operate on multiple tracks as a group.
-And one track is seen as a group in which only one element.
-Thus, created source is also a group.
-And it is also convenient to apply filters to a group of tracks at a time.
-```JavaScript
-let video = await fflow.source('./test.avi') // return a TrackGroup
-let tracks = video.tracks() // return an array of Tracks. (audio / video)
-let audioTracks = video.filter('audio') // return a new TrackGroup (contain only audio tracks)
-let newGroup = fflow.group([audioTracks[0], video.tracks()[1]]) // group multiple tracks into one
-```
-
 ### Get metadata
 Metadata can provide you some information, which can be used for filters' arguments.
 And internally, they are also used for checking your created filter graph, which will explain in [filters](#filters).
@@ -92,10 +81,22 @@ console.log(video.duration) // get one item in metadata
 console.log(video.metadata) // get all metadata information (container + tracks)
 ```
 
+### Tracks selection
+Usually, we can directly operate on multiple tracks as a group.
+And one track is seen as a group in which only one element.
+Thus, created source is also a group.
+And it is also convenient to apply filters to a group of tracks at a time.
+```JavaScript
+let video = await fflow.source('./test.avi') // return a TrackGroup
+let audioTrackGroup = video.filter('audio') // return a new TrackGroup (contain only audio tracks)
+let audioTracks = audioTrackGroup.tracks() // return an array of Tracks. (audio)
+let newGroup = fflow.group([audioTracks[0], audioTracks[1]]) // group multiple tracks into one group
+```
+
 ### Transcode
-One of core features is to convert audio/video files into another with different parameters, e.g. format, codec. Here you just need to focus on source and target, using `Export` function.
+One of core use cases is to convert audio/video files into another with different parameters, e.g. format, codec. Here you just need to focus on source and target, using `Export` function.
 It will build a graph internally to execute.
-There are three ways to `export`, fitting in your various use cases.
+There are three ways to `export`, meeting your various use cases.
 
 #### `exportTo`: fastest way
 This api can export to multiple types of outputs, e.g. url / path / Blob / ArrayBuffer.
@@ -104,7 +105,7 @@ let video = await fflow.source('./test.avi')
 await video.exportTo('./out_test.mp4') // no return
 let blob = await video.exportTo(Blob) // return a new blob
 ```
-#### `export`: flexible way with automatic pace
+#### `export + for...of`: flexible way with automatic pace
 ```JavaScript
 let target = await video.export()
 for await (let chunk of target) {
@@ -113,7 +114,7 @@ for await (let chunk of target) {
     chunk.offset // chunk offset position (bytes) in the output file
 }
 ```
-#### `export`: most flexible way with manual control (export)
+#### `export + next`: most flexible way with manual control
 Actually this way is the basic method for above two ways.
 ```JavaScript
 let target = await video.export()
@@ -134,7 +135,7 @@ Now here, we can use JavaScript way to build a graph, both flexible and easy to 
 #### Example
 ```JavaScript
 let video = await fflow.source('./test.avi')
-await video.trim(1, video.duration).setVolume(0.5).exportTo('./out_test.mp4')
+await video.trim({start: 1, duration: video.duration}).setVolume(0.5).exportTo('./out_test.mp4')
 ```
 This example apply `trim` and `setVolume` filter operations which support chainable operation.
 Each filter operation returns a new TrackGroup.
@@ -146,8 +147,8 @@ But here, `TrackGroup.trim()` apply either `trim` or `atrim` to each internal tr
 They are smart enough to build and process.
 
 #### Filters API
-- trim(startTime: number, endTime: number). In seconds.
-- setVolume(volume: number). Times of volume
+- trim(args: {start: number, duration: number}). In seconds.
+- setVolume(multiple: number). Multiple of input volume
 
 ## Problems
 ### Packet size

@@ -20,7 +20,7 @@ class Encoder {
 public:
     Encoder(StreamInfo info);
     ~Encoder() { avcodec_free_context(&codec_ctx); };
-    void setTimeBase(AVRational time_base) { codec_ctx->time_base = time_base; }
+    AVRational timeBase() const { return codec_ctx->time_base; }
     vector<Packet*> encode(Frame* frame);
     vector<Packet*> flush() { return encode(NULL); }
 // c++ only

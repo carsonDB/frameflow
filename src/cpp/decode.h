@@ -23,7 +23,7 @@ public:
     Decoder(string codec_name, std::string name);
     ~Decoder() { avcodec_free_context(&codec_ctx); };
     std::string name() const { return _name; }
-    void setTimeBase(AVRational time_base) { codec_ctx->time_base = time_base; }
+    AVRational timeBase() const { return codec_ctx->time_base; }
     std::vector<Frame*> decode(Packet* pkt);
     std::vector<Frame*> flush() {
         auto pkt = new Packet();

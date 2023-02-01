@@ -49,6 +49,10 @@ public:
         av_dump_format(format_ctx, 0, _url.c_str(), 0);
     }
 
+    AVRational getTimeBase(int stream_index) {
+        return format_ctx->streams[stream_index]->time_base;
+    }
+
     FormatInfo getMetadata() { 
         return createFormatInfo(format_ctx); 
     }
