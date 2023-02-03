@@ -67,8 +67,8 @@ export function applySingleFilter(streamRefs: StreamRef[], filter: Filter): Stre
             case 'trim': {
                 const {start, duration} = filter.args
                 const name = s.mediaType == 'audio' ? 'atrim' : 'trim'
-                if (start < s.startTime || (start + duration) > s.duration)
-                    throw 'trim range (absolute) has exceeded input range'
+                if (start < s.startTime || duration > s.duration)
+                    throw `trim range (${start}, ${start + duration}) has exceeded input range (${s.startTime}, ${s.startTime + s.duration})`
                 const trimNode: FilterNode = {
                     type: 'filter', filter: {name, ffmpegArgs: {start, duration}}, 
                     inStreams: [streamRef], outStreams: [{...s, startTime: start, duration}] }

@@ -161,6 +161,10 @@ class FilterTrackGroup extends TrackGroup {
             applySingleFilter(inStreams, filter) : applyMulitpleFilter(inStreamsArr, filter)
         super(streamRefs)
     }
+
+    get metadata() {
+        throw `Currently only SourceTrackGroup has this method.`
+    }
 }
 
 

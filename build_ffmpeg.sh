@@ -47,7 +47,7 @@ cd "$EXT_LIB"/libvpx && emmake make install -j4
 
 # export global env variable for FFmpeg to detect
 export EM_PKG_CONFIG_PATH=$EXT_LIB_BUILD_PKG_CONFIG
-
+# export STRIP="llvm-strip"
 
 ###################
 # FFmpeg build

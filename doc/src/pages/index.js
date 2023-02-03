@@ -4,7 +4,7 @@ import Link from '@docusaurus/Link';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import Layout from '@theme/Layout';
 import HomepageFeatures from '@site/src/components/HomepageFeatures';
-import Frameflow_diagram from '@site/static/img/diagram.svg';
+import Frameflow_diagram from '@site/static/img/diagram.png';
 
 import styles from './index.module.css';
 
@@ -15,7 +15,7 @@ function HomepageHeader() {
       <div className="container">
         <h1 className="hero__title">{siteConfig.title}</h1>
         <p className="hero__subtitle">{siteConfig.tagline}</p>
-        <Frameflow_diagram title="FramFlow diagram" className="diagram" />
+        <img src={Frameflow_diagram} title="FramFlow diagram" className="diagram" />
         {/* <div className={styles.buttons}> */}
           {/* <Link
             className="button button--secondary button--lg"

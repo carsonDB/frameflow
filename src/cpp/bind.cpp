@@ -32,6 +32,13 @@ EMSCRIPTEN_BINDINGS(metadata) {
         .field("channels", &StreamInfo::channels)
     ;
 
+    value_object<DataFormat>("DataFormat")
+        .field("format", &DataFormat::format)
+        .field("channel_layout", &DataFormat::channel_layout)
+        .field("channels", &DataFormat::channels)
+        .field("sample_rate", &DataFormat::sample_rate)
+    ;
+
     value_object<FormatInfo>("FormatInfo")
         .field("formatName", &FormatInfo::format_name)
         .field("bitRate", &FormatInfo::bit_rate)
@@ -61,6 +68,7 @@ EMSCRIPTEN_BINDINGS(decode) {
         .constructor<std::string, std::string>()
         .property("name", &Decoder::name)
         .property("timeBase", &Decoder::timeBase)
+        .property("dataFormat", &Decoder::dataFormat)
         .function("decode", &Decoder::decode, allow_raw_pointers())
         .function("flush", &Decoder::flush, allow_raw_pointers())
     ;
@@ -104,6 +112,7 @@ EMSCRIPTEN_BINDINGS(encode) {
     class_<Encoder>("Encoder")
         .constructor<StreamInfo>()
         .property("timeBase", &Encoder::timeBase)
+        .property("dataFormat", &Encoder::dataFormat)
         .function("encode", &Encoder::encode, allow_raw_pointers())
         .function("flush", &Encoder::flush, allow_raw_pointers())
     ;

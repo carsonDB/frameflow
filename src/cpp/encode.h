@@ -4,6 +4,11 @@
 #include <string>
 #include <vector>
 
+extern "C" {
+    #include <libavcodec/avcodec.h>
+}
+
+
 #include "metadata.h"
 #include "packet.h"
 #include "frame.h"
@@ -16,11 +21,19 @@ class Encoder {
      * 
      */
     AVCodecContext* codec_ctx;
-    Packet packet;
+    AudioFrameFIFO* fifo = NULL;
+    AVRational from_time_base;
+
 public:
     Encoder(StreamInfo info);
-    ~Encoder() { avcodec_free_context(&codec_ctx); };
+    ~Encoder() { 
+        if (fifo != NULL)
+            delete fifo;
+        avcodec_free_context(&codec_ctx); 
+    };
     AVRational timeBase() const { return codec_ctx->time_base; }
+    DataFormat dataFormat() const { return createDataFormat(codec_ctx); }
+    vector<Packet*> encodeFrame(Frame* frame);
     vector<Packet*> encode(Frame* frame);
     vector<Packet*> flush() { return encode(NULL); }
 // c++ only

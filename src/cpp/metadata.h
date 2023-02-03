@@ -41,8 +41,18 @@ struct StreamInfo {
 };
 
 
-StreamInfo createStreamInfo(AVStream* s);
+StreamInfo createStreamInfo(AVFormatContext* p, AVStream* s);
 void set_avcodec_context_from_streamInfo(StreamInfo& info, AVCodecContext* ctx);
+
+
+struct DataFormat {
+    string format; // AVSampleFormat / AVPixelFormat
+    string channel_layout;
+    int channels;
+    int sample_rate; 
+};
+
+DataFormat createDataFormat(AVCodecContext* ctx);
 
 
 struct FormatInfo {

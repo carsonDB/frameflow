@@ -71,7 +71,10 @@ void Muxer::writeFrame(Packet* packet, int stream_i) {
     auto av_stream = streams[stream_i]->av_stream_ptr();
     // rescale packet from encoder to muxer stream
     CHECK(stream_i >= 0 && stream_i < from_time_bases.size(), "stream_index of packet not in valid from_time_bases");
+
     av_packet_rescale_ts(av_pkt, from_time_bases[stream_i], av_stream->time_base);
+    av_pkt->stream_index = stream_i;
+    
     int ret = av_interleaved_write_frame(format_ctx, av_pkt);
     CHECK(ret >= 0, "interleave write frame error");
 }

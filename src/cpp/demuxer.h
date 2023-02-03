@@ -19,7 +19,7 @@ using namespace emscripten;
 class Demuxer {
     AVFormatContext* format_ctx;
     AVIOContext* io_ctx;
-    std::vector<double> currentStreamsPTS; 
+    std::map<int, double> currentStreamsPTS; 
     int buf_size = 32*1024;
     std::string _url;
     val reader;
@@ -59,7 +59,7 @@ public:
 
     /* timestamp of current first packet of the stream, which will be parsed next */
     double currentTime(int stream_index) {
-        CHECK(stream_index >= 0 && stream_index < currentStreamsPTS.size(), "stream_index not in valid currentStreamsPTS");
+        CHECK(currentStreamsPTS.count(stream_index) > 0, "stream_index not in valid currentStreamsPTS");
         return currentStreamsPTS[stream_index];
     }
 

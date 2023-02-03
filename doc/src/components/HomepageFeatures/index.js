@@ -1,45 +1,70 @@
 import React from 'react';
+import CodeBlock from '@theme/CodeBlock';
 import clsx from 'clsx';
 import styles from './styles.module.css';
 
 const FeatureList = [
   {
-    title: 'Easy to Use',
-    Svg: require('@site/static/img/undraw_docusaurus_mountain.svg').default,
+    title: 'Stream I/O',
+    Code: (
+      <CodeBlock language="js" >{
+        `let src = await fflow.source('...')\nconsole.log(src.metadata)`
+      }</CodeBlock>
+    ),
     description: (
       <>
-        Docusaurus was designed from the ground up to be easily installed and
-        used to get your website up and running quickly.
+        FrameFlow was designed to support all JavaScript I/O as stream way.
+        Just one simple line, with metadata as side effects.
       </>
     ),
   },
   {
-    title: 'Focus on What Matters',
-    Svg: require('@site/static/img/undraw_docusaurus_tree.svg').default,
+    title: 'Build filter graph in JS way',
+    Code: (
+      <CodeBlock language="js" >
+        {`src.trim({start: 1, duration: 10})\n`}
+        {`   .setVolume(0.5)\n`}
+      </CodeBlock>
+    ),
     description: (
       <>
-        Docusaurus lets you focus on your docs, and we&apos;ll do the chores. Go
-        ahead and move your docs into the <code>docs</code> directory.
+        Instead of building filter graph using FFmpeg command-line, 
+        frameflow use a simple way to construct. Here is to trim a video input.
       </>
     ),
   },
   {
-    title: 'Powered by React',
-    Svg: require('@site/static/img/undraw_docusaurus_react.svg').default,
+    title: 'Control progress by yourself',
+    Code: (
+      <CodeBlock language="js" >
+        {`// method 1 \n`}
+        {`await src.exportTo('...')\n`}
+        {`// method 2 \n`}
+        {`let target = await src.export()\n`}
+        {`for await (let chunk of target) {\n`}
+        {`    // do something... \n`}
+        {`}\n`}
+        {`// method 3 \n`}
+        {`let target = await src.export()\n`}
+        {`// one at a time\n`}
+        {`let chunk = await target.next()\n`}
+      </CodeBlock>
+    ),
     description: (
       <>
-        Extend or customize your website layout by reusing React. Docusaurus can
-        be extended while reusing the same header and footer.
+        You can choose either <code>exportTo</code> to export video automatically,
+        or <code>export</code> to stream output.
       </>
     ),
   },
 ];
 
-function Feature({Svg, title, description}) {
+function Feature({Code, title, description}) {
   return (
     <div className={clsx('col col--4')}>
       <div className="text--center">
-        <Svg className={styles.featureSvg} role="img" />
+        {/* <Svg className={styles.featureSvg} role="img" /> */}
+        <div style={{textAlign: 'left'}}>{Code}</div>
       </div>
       <div className="text--center padding-horiz--md">
         <h3>{title}</h3>

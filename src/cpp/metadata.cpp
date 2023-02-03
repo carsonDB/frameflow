@@ -1,9 +1,17 @@
 #include "metadata.h"
 
-// from timestamp in time_base to seconds
+/* from timestamp in time_base to seconds */
 inline double toSeconds(int64_t time_ts, AVRational& time_base) {
     return time_ts != AV_NOPTS_VALUE ? 
         time_ts * (double)time_base.num / time_base.den : 0;
+}
+
+/* get description of channel_layout */
+inline string get_channel_layout_name(int channels, uint64_t channel_layout) {
+    int buf_size = 256;
+    char buf[buf_size];
+    av_get_channel_layout_string(buf, buf_size, channels, channel_layout);
+    return buf;
 }
 
 StreamInfo createStreamInfo(AVFormatContext* format_ctx, AVStream* s) {
@@ -28,11 +36,8 @@ StreamInfo createStreamInfo(AVFormatContext* format_ctx, AVStream* s) {
         info.sample_rate = par->sample_rate;
         info.channels = par->channels;
         info.format = av_get_sample_fmt_name((AVSampleFormat)par->format);
-        // get description of channel_layout
-        int buf_size = 256;
-        char buf[buf_size];
-        av_get_channel_layout_string(buf, buf_size, par->channels, par->channel_layout);
-        info.channel_layout = buf;
+        info.channel_layout = get_channel_layout_name(par->channels, par->channel_layout);
+
     }
 
     return info;
@@ -62,26 +67,41 @@ void set_avcodec_context_from_streamInfo(StreamInfo& info, AVCodecContext* ctx) 
         ctx->pix_fmt = av_get_pix_fmt(info.format.c_str());
         // find proper frame_rate
         auto frame_rate = av_d2q(info.frame_rate, INT_MAX);
-        if (codec->supported_framerates != NULL) {
-            auto id = av_find_nearest_q_idx(frame_rate, codec->supported_framerates);
-            ctx->framerate = codec->supported_framerates[id];
-        }
-        else
-            ctx->framerate = frame_rate;
+        // if (codec->supported_framerates != NULL) {
+        //     auto id = av_find_nearest_q_idx(frame_rate, codec->supported_framerates);
+        //     ctx->framerate = codec->supported_framerates[id];
+        // }
+        // else
+        ctx->framerate = frame_rate;
     }
     else if (info.codec_type == "audio") {
         ctx->codec_type = AVMEDIA_TYPE_AUDIO;
         ctx->sample_fmt = av_get_sample_fmt(info.format.c_str());
         ctx->channel_layout = av_get_channel_layout(info.channel_layout.c_str());
         ctx->channels = av_get_channel_layout_nb_channels(ctx->channel_layout);
-        // find proper sample_rate
-        if (codec->supported_samplerates != NULL) {
-            auto id = find_nearest_number(info.sample_rate, codec->supported_samplerates);
-            ctx->sample_rate = codec->supported_samplerates[id];
-        }
-        else
-            ctx->sample_rate = info.sample_rate;
+        // // find proper sample_rate
+        // if (codec->supported_samplerates != NULL) {
+        //     auto id = find_nearest_number(info.sample_rate, codec->supported_samplerates);
+        //     ctx->sample_rate = codec->supported_samplerates[id];
+        // }
+        // else
+        ctx->sample_rate = info.sample_rate;
     }
+}
+
+DataFormat createDataFormat(AVCodecContext* ctx) {
+    DataFormat df;
+    if (ctx->codec_type == AVMEDIA_TYPE_VIDEO) {
+        df.format = av_get_pix_fmt_name(ctx->pix_fmt);
+    }
+    else if (ctx->codec_type == AVMEDIA_TYPE_AUDIO) {
+        df.sample_rate = ctx->sample_rate;
+        df.channels = ctx->channels;
+        df.format = av_get_sample_fmt_name(ctx->sample_fmt);
+        df.channel_layout = get_channel_layout_name(ctx->channels, ctx->channel_layout);
+    }
+
+    return df;
 }
 
 

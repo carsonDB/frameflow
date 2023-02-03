@@ -47,8 +47,6 @@ interface GraphRuntime {
     ffmpeg: FFmpegModule
 }
 let graph: GraphRuntime | null = null
-const TimeBases: {frame: {[k in string]?: Rational}, packet: {[k in string]?: Rational}} = {frame: {}, packet: {}}
-
 
 // initiantate wasm module
 async function loadModule(wasmBinary: ArrayBuffer) {
@@ -243,14 +241,12 @@ function buildFiltersGraph(graphConfig: FilterGraph, nodes: GraphConfig['nodes']
     }
 
     const buffersrcArgs = (id: string, s: StreamMetadata, keyValSep='=', pairsSep=':') => {
-        const timeBase = TimeBases.frame[id]
-        if (!timeBase) throw `filter buffersrc cannot find timeBase`
         const streamInfo: {[k: string]: number | string} = s.mediaType == 'video' ? {
             width: s.width, height: s.height, pix_fmt: s.pixelFormat, 
-            time_base: `${timeBase.num}/${timeBase.den}`,
+            time_base: `${s.timeBase.num}/${s.timeBase.den}`,
             pixel_aspect: `${s.sampleAspectRatio.num}/${s.sampleAspectRatio.den}`
         } : {
-            time_base: `${timeBase.num}/${timeBase.den}`,
+            time_base: `${s.timeBase.num}/${s.timeBase.den}`,
             sample_rate: s.sampleRate, sample_fmt: s.sampleFormat,
             channel_layout: s.channelLayout
         }
@@ -306,11 +302,12 @@ function buildFiltersGraph(graphConfig: FilterGraph, nodes: GraphConfig['nodes']
 
     // find the smallest timestamp source stream and read packet
     const {reader} = graph.sources.reduce((acc, {reader}) => {
-        const currentTime = reader.currentTime
+        if (reader.inputEnd) return acc
+        const currentTime = reader.currentTime ?? Infinity
         return (currentTime < acc.currentTime) ? {reader, currentTime} : acc
-    }, {reader: graph.sources[0].reader, currentTime: graph.sources[0].reader.currentTime})
+    }, {reader: null as SourceReader | null, currentTime: Infinity})
     // read frames from sources
-    const frames = await reader.readFrames()
+    const frames = await reader?.readFrames() ?? []
 
     // feed into filterer if exists
     if (graph.filterers && frames.length != 0) {
@@ -330,10 +327,10 @@ function buildFiltersGraph(graphConfig: FilterGraph, nodes: GraphConfig['nodes']
     })
     
     // delete frames
-    Object.values(frames).forEach(f => f?.delete())
+    frames.forEach(f => f?.delete())
 
-    // current progress
-    const progress = graph.sources.reduce((pg, s) => Math.min(s.reader.progress, pg), Infinity)
+    // current progress in [0, 1]
+    const progress = graph.sources.reduce((pg, s) => Math.min(s.reader.progress, pg), 1)
     
     return {outputs, progress, endWriting}
 }
@@ -369,9 +366,7 @@ class VideoSourceReader {
         await this.demuxer.build(this.#inputIO)
         this.node.outStreams.forEach((s, i) => {
             const id = streamId(this.node.id, i)
-            TimeBases.packet[id] = this.demuxer.getTimeBase(s.index)
             const decoder = new this.module.Decoder(this.demuxer, s.index, id)
-            TimeBases.frame[id] = decoder.timeBase
             this.decoders[s.index] = decoder
         })
     }
@@ -380,8 +375,8 @@ class VideoSourceReader {
 
     /* smallest currentTime among all streams */
     get currentTime() {
-        return this.node.outStreams.reduce((acc, _, i) => {
-            return Math.min(acc, this.demuxer.currentTime(i))
+        return this.node.outStreams.reduce((acc, s) => {
+            return Math.min(acc, this.demuxer.currentTime(s.index))
         }, Infinity)
     }
 
@@ -402,6 +397,7 @@ class VideoSourceReader {
         const frameVec = this.inputEnd && pkt.size == 0 ? decoder.flush() : decoder.decode(pkt)
         // free temporary variables
         pkt.delete()
+
         return vec2Array(frameVec)
     }
 
@@ -478,10 +474,7 @@ class VideoTargetWriter {
         node.outStreams.forEach((s, i) => {
             const {from, index} = node.inStreams[i]
             const id = streamId(from, index)
-            // const encoderTimeBase = TimeBases.frame[id]
-            // if (!encoderTimeBase) throw `encoder cannot find timeBase`
-            // const encoder = new ffmpeg.Encoder({...streamMetadataToInfo(s), timeBase: encoderTimeBase})
-            const encoder = new ffmpeg.Encoder({...streamMetadataToInfo(s)}) // todo... timeBase from encoder
+            const encoder = new ffmpeg.Encoder(streamMetadataToInfo(s))
             // use inStream ref
             this.encoders[id] = encoder
             const timeBase = s.mediaType == 'audio' ? {num: 1, den: s.sampleRate} : {num: 1, den: s.frameRate}

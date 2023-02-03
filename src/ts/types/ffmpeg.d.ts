@@ -51,6 +51,7 @@ class Decoder {
     constructor(params: string, name: string)
     name: number
     get timeBase(): AVRational
+    get dataFormat(): DataFormat
     decode(packet: Packet): StdVector<Frame>
     flush(): StdVector<Frame>
     delete(): void
@@ -78,6 +79,13 @@ interface StreamInfo {
     channels: number
     channelLayout: string
     sampleRate: number
+}
+
+interface DataFormat {
+    format: string // pixel_fmt / sample_fmt
+    channels: number
+    channel_layout: string
+    sample_rate: number
 }
 
 // packet
@@ -110,6 +118,7 @@ class Filterer {
 class Encoder {
     constructor(params: StreamInfo)
     get timeBase(): AVRational
+    get dataFormat(): DataFormat
     encode(f: Frame): StdVector<Packet>
     flush(): StdVector<Packet>
     delete(): void

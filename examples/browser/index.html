@@ -78,20 +78,21 @@
     </script>
 
     <h2>👉Upload video (developing...) </h2>
-    <video id="trim-video" controls></video><br />
+    <video id="test-video" controls></video><br />
     <input id="uploader" type="file" />
     <button id="test-transcode">Transcode</button>
     <span id="test-progress"></span>
     <script>
-        let video = null
+        let videoFile = null
         const fileDom = document.getElementById('uploader')
-        fileDom.onchange = (e) => video = e.target.files[0]
+        fileDom.onchange = (e) => videoFile = e.target.files[0]
         
         document.getElementById('test-transcode').onclick = async () => {
             const onProgress = pg => document.getElementById('test-progress').textContent = `${(pg*100).toFixed(2)}%`
-            const src = await fflow.source(video)
-            console.log('Metadata:', src.metadata)
-            const blob = await src.filter('video').tracks()[0].exportTo(Blob, {format: 'avi', progress: onProgress}) 
+            const vidSrc = await fflow.source(videoFile)
+            console.log(vidSrc.metadata)
+            const output = vidSrc.filter('video')
+            const blob = await output.exportTo(Blob, {format: 'mp4', progress: onProgress})
             
             const link = document.createElement('a')
             link.href = URL.createObjectURL(blob)
