@@ -91,14 +91,22 @@
             const onProgress = pg => document.getElementById('test-progress').textContent = `${(pg*100).toFixed(2)}%`
             const vidSrc = await fflow.source(videoFile)
             console.log(vidSrc.metadata)
-            const output = vidSrc.filter('video')
-            const blob = await output.exportTo(Blob, {format: 'mp4', progress: onProgress})
+            const output = vidSrc
+
+            const target = await output.export({format: 'mp4', progress: onProgress})
+            let size = 0
+            for await (let chunk of target) {
+                size += chunk.data.byteLength
+                console.log(chunk.data.byteLength)
+                if (size > 320) break
+            }
             
-            const link = document.createElement('a')
-            link.href = URL.createObjectURL(blob)
-            link.download = 'output_video'
-            link.innerHTML = "Click to download";
-            document.body.appendChild(link)
+            // const blob = await output.exportTo(Blob, {format: 'mp4', progress: onProgress})
+            // const link = document.createElement('a')
+            // link.href = URL.createObjectURL(blob)
+            // link.download = 'output_video'
+            // link.innerHTML = "Click to download";
+            // document.body.appendChild(link)
         }
     </script>
 </body>

@@ -121,7 +121,7 @@ let target = await video.export()
 let chunk = await target.next()
 while (chunk.data) {
     /* post-processing chunk */
-    chunk = target.next()
+    chunk = await target.next()
 }
 // execute this line if quitting halfway.
 await target.close()

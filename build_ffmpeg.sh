@@ -65,17 +65,6 @@ CONFIG_ARGS=(
   --disable-asm           # disable asm optimization
   --disable-stripping     # disable stripping
   --enable-gpl            # for x264
-  
-  # demuxer / muxer
-  # --disable-muxers
-  # --enable-muxer=mp4,mov,matroska,webm,avi,aac
-  # decoder / encoder
-  # --disable-encoders
-  # --enable-encoder=aac,pcm_s16le
-  # external library
-  # filter
-  # --disable-filters
-  # --enable-filter=concat,amerge,atrim,trim,aloop,loop,volume,aformat,format,scale,aresample
   # protocal
   --disable-protocols
   --enable-protocol=file

@@ -159,6 +159,7 @@ class InputIO {
     async seek(pos: number) { 
         await handler.send('seek', {pos}, undefined, this.#id) 
         this.#buffers = []
+        this.#endOfFile = false
     }
 
     get end() { return this.#endOfFile }
@@ -299,7 +300,6 @@ function buildFiltersGraph(graphConfig: FilterGraph, nodes: GraphConfig['nodes']
  * processing one frame as a step
  */
  async function executeStep(graph: GraphRuntime) {
-
     // find the smallest timestamp source stream and read packet
     const {reader} = graph.sources.reduce((acc, {reader}) => {
         if (reader.inputEnd) return acc
@@ -390,7 +390,7 @@ class VideoSourceReader {
 
     async readFrames(): Promise<Frames> {
         const pkt = await this.demuxer.read()
-        if (pkt.size == 0) 
+        if (pkt.size == 0)
             this.#endOfPacket = true
         const decoder = this.decoders[pkt.streamIndex]
         if (!decoder) throw `not found the decorder of source reader`
