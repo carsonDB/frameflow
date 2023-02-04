@@ -13,9 +13,6 @@ FFmpeg is a both powerful and intuitive media processing library. We can use it 
 
 ## Problems of FrameFlow
 
-### unmature
-The first major problem is unmature.  
-
 ### Packet size
 FrameFlow heavily relies on FFmpeg as basic part.
 However, FFmpeg library itself is huge size, from the perspective of web developers.
@@ -30,7 +27,7 @@ Webassembly comes to act as JavaScript partner, who is good at speed performance
 
 ### Speed
 
-#### Solution
+#### Solutions
 - Optimize interaction between JS and Wasm.
 - Enable multi-threads.
 - Use WebCodecs API when browsers support specific codec.

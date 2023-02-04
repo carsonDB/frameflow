@@ -1,8 +1,8 @@
 {
   "name": "frameflow",
   "version": "0.1.0",
-  "description": "typescript wrapper of c ffmpeg",
-  "main": "./dist/main.js",
+  "description": "Audio/Video stream processing library for JavaScript world",
+  "main": "./dist/frameflow.js",
   "directories": {
     "example": "examples"
   },

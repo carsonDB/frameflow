@@ -27,7 +27,11 @@ async function createSource(src: SourceType, options?: {}) {
     const metadata = await worker.send('getMetadata', {id, fullSize: reader.fullSize, url: reader.url, wasm})
     const srcTracks = new SourceTrackGroup(src, metadata.streams, metadata.container, reader.fullSize)
     // ready to end
-    worker.close()
+    /* hacky way to avoid slowing down wasm loading in next worker starter.
+     * Several experiments show that if create worker and load wasm immediately after worker.close(),
+     * it will become 10x slower, guess it is because of GC issue.
+     */
+    setTimeout(() => worker.close(), 5000)
 
     return srcTracks
 }
