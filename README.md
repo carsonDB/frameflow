@@ -142,12 +142,14 @@ sudo apt-get install -y pkg-config
 ### Emscripten
 ```
 git clone https://github.com/emscripten-core/emsdk.git --branch 3.1.30
+rm -r emsdk/.git
 ```
 [Install Emscripten SDK](https://emscripten.org/docs/getting_started/downloads.html#installation-instructions-using-the-emsdk-recommended)
 
 ### FFmpeg version (n5.0 release)
 ```
 git clone  https://github.com/FFmpeg/FFmpeg --depth 1 --branch n5.0
+rm -r FFmpeg/.git
 ```
 
 ### External FFmpeg Libraries
