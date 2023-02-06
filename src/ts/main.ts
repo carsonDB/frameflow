@@ -10,11 +10,15 @@ import { FFWorker } from "./message"
 import { Exporter, Reader } from "./streamIO"
 import { DataBuffer, FormatMetadata, SourceNode, SourceType, StreamMetadata, StreamRef, TargetNode, WriteDataBuffer } from "./types/graph"
 import { isNode } from './utils'
-
+// @ts-ignore
+import Worker from 'worker-loader?inline=no-fallback!./transcoder.worker.ts'
 
 
 // Warning: webpack 5 only support pattern: new Worker(new URL('', import.meta.url))
-const createWorker = () => new Worker(new URL('./transcoder.worker.ts', import.meta.url))
+// const createWorker = () => new Worker(new URL('./transcoder.worker.ts', import.meta.url))
+/* use worker inline way to avoid bundle issue as dependency for further bundle. */
+const createWorker = () => new Worker()
+
 
 async function createSource(src: SourceType, options?: {}) {
     const id = uuid() // temporarily node id for getMetadata
@@ -322,4 +326,5 @@ const multipleFilter = {
 export default {
     source: createSource,
     ...multipleFilter,
+    loadWASM: () => loadWASM()
 }

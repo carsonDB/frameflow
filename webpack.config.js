@@ -4,12 +4,20 @@ const HtmlWebpackPlugin = require('html-webpack-plugin');
 
 
 const basicConfig = {
-    entry: { frameflow: './src/ts/main.ts' },
+    entry: './src/ts/main.ts',
     module: {
         rules: [
             { test: /\.ts?$/, use: 'ts-loader', exclude: /node_modules/ },
-            { test: /\.wasm$/, type: `asset/resource` },
-            // { test: /ffmpeg.js$/, parser: { javascript: { url: false } } }
+            {
+                test: /\.worker\.js$/,
+                loader: "worker-loader",
+                options: { inline:"no-fallback" }
+            },
+            { 
+                test: /\.wasm$/, 
+                type: `asset/resource`,
+                generator: { filename: '[name].wasm' }
+            },
         ],
     },
 
@@ -19,11 +27,11 @@ const basicConfig = {
     },
 
     output: {
-        filename: '[name].js',
+        filename: 'frameflow.min.js',
         library: {
+            name: 'frameflow',
             type: 'umd',
             export: 'default',
-            name: 'frameflow',
         },
         globalObject: 'this',
         path: path.resolve(__dirname, 'dist'),
@@ -57,7 +65,6 @@ const prodConfig = {
             new TerserPlugin()
         ],
     },
-    devtool: 'source-map',
 }
 
 

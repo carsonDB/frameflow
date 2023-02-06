@@ -53,7 +53,7 @@ export type StreamMetadata = AudioStreamMetadata | VideoStreamMetadata
  * user defined graph
  */
 type UserNode = SourceNode | FilterNode | TargetNode
-export type SourceType = ReadableStream<DataBuffer> | string | URL | Blob | DataBuffer
+export type SourceType = ReadableStream<DataBuffer> | string | URL | RequestInfo | Blob | DataBuffer
 interface StreamRef { from: SourceNode | FilterNode, index: number }
 export interface SourceNode {
     type: 'source', outStreams: StreamMetadata[], source: SourceType, url?: string

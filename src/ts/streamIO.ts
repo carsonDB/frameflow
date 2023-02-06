@@ -10,8 +10,12 @@ type SourceStreamReader = ReadableStreamDefaultReader<DataBuffer> | NodeJS.Reada
 type SourceStreamCreator = (seekPos: number) => Promise<SourceStream>
 
 
-async function fetchSourceInfo(url: string | URL): Promise<{size: number, url: string}> {
-    const urlStr = typeof url == 'string' ? url : url.href
+async function fetchSourceInfo(url: URL | RequestInfo): Promise<{size: number, url: string}> {
+    let urlStr = ''
+    if (typeof url == 'string') urlStr = url
+    else if (url instanceof URL) urlStr = url.href
+    else urlStr = url.url
+
     const { headers } = await fetch(url, { method: "HEAD" })
     // if (!headers.get('Accept-Ranges')?.includes('bytes')) throw `cannot accept range fetch`
     // todo... check if accept-ranges
@@ -34,7 +38,7 @@ async function getSourceInfo(src: SourceType): Promise<{size: number, url?: stri
             return await fetchSourceInfo(src)
         }
     }
-    else if (src instanceof URL) {
+    else if (src instanceof URL || src instanceof Request) {
         return await fetchSourceInfo(src)
     }
     else if (src instanceof Blob) {
@@ -51,7 +55,7 @@ async function getSourceInfo(src: SourceType): Promise<{size: number, url?: stri
 }
 
 
-async function fetchSourceData(url: string | URL, startPos: number): Promise<SourceStream> {
+async function fetchSourceData(url: RequestInfo | URL, startPos: number): Promise<SourceStream> {
     const { body, headers } = await fetch(url, { headers: { range: `bytes=${startPos}-` } })
     if (!body) throw `cannot fetch source url: ${url}`
     return body
@@ -73,7 +77,7 @@ const sourceToStreamCreator = (src: SourceType): SourceStreamCreator => async (s
             return await fetchSourceData(src, seekPos)
         }
     }
-    else if (src instanceof URL) {
+    else if (src instanceof URL || src instanceof Request) {
         return await fetchSourceData(src, seekPos)
     }
     else if (src instanceof Blob) {

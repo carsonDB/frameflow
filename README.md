@@ -7,61 +7,34 @@ It directly uses low-level C API from libav* folders in FFmepg, wrapped with C++
 For example, we can download, process and upload at the same time.
 - Processing speed can be controlled either automatically or manually.
 For example, export a video to a canvas as playing a video.
-- Use JavaScript chainable style to build filter graphs, which is both easy and flexible.
+- Use JavaScript chaining style to build filter graphs, which is both easy and flexible.
 
-⚠️ Note: current verison is at **prototype** stage. Only web browser examples are tested.
+⚠️ Note: current verison is at **prototype** stage. Only **web browser** examples are tested.
 Nodejs hasn't been tested yet.
 And almost everything is under optimization. You words will shape the future of FrameFlow.
 
-## Simple demo
-Demos are in the `./examples/...`
+## Demo
 
-One media source in, and one out (another encoding), with a simple filter.
-### Nodejs (only)
 ```JavaScript
 import fflow from 'frameflow'
-let source = await fflow.source('./test.avi')
-await source.trim(1, 10).exportTo('./out.webm')
+
+let video = await fflow.source(videoBlob) // use web File api to get File handler.
+let audio = await fflow.source(audioURL) // remote media file (no need to download entirely beforehand)
+let audioTrim = audio.trim({start: 10, duration: video.duration}) // use metadata of video
+let blob = await fflow.group([video, audioTrim]).exportTo(Blob, {format: 'mp4'}) // group and trancode to 
+videoDom.src = URL.createObjectURL(blob)
+// now can play in the browser
 ```
+Although this example writes to blob entirely, then play.
+But underhood, it streams out chunks and then put togather.
 
-### Browser/Nodejs
-```JavaScript
-import fflow from 'frameflow'
-// use web File api to get File handler.
-let source = await fflow.source(fileBlob)
-let stream = await source.trim(1, 10).export()
-for await (let chunk of stream) {
-    /* do something */
-}
-```
+More detailed browser demos are in the `./examples/browser/index.html`
 
-## Complex demo
-Multiple sources in, and multiple outputs. Inputs and outputs can be streaming images.
-
-```JavaScript
-let video1 = await fflow.source('./test.avi') // node.js
-let video2 = await fflow.source(blobFile) // browser
-console.log(video2.duration) // show metadata of the source
-
-// streaming processing (filtering)
-video1 = video1.trim(startTime, endTime).loop(1.5)
-let audio2 = video2.filter('audio').setVolume(0.5)
-video2 = fflow.merge([video2.filter('video'), audio2])
-let output = fflow.concat([video1, video2])
-
-// output all at once
-await output.exportTo('./out.webm')
-// output frame by frame
-let stream = await output.export({image: 'bmp'})
-setInterval(() => {
-    let image = await stream.next()
-}, 1000/30) // render at 30 fps.
-stream.close()
-
-```
 
 ## Install
-todo...
+```
+npm i frameflow
+```
 
 ## Get started
 
