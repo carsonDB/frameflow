@@ -70,7 +70,7 @@ function HomepageDemo() {
           <h1 className="hero__title">Try a demo</h1>
           <h4>Trim a audio and group with avi video, to mp4 file, which can play in HTMLVideoElement.</h4>
           
-          <Button variant='outline-success' onClick={onClick} >
+          <Button variant='warning' onClick={onClick} >
             <span>Click to Run</span>
             {progress > 0 ? ` ${(progress*100).toFixed(1)}%` : ''}
           </Button>
