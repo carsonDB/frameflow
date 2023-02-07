@@ -47,21 +47,28 @@ let videoURL = '${demoVideoURL}'
 let audioURL = '${demoAudioURL}'
 let video = await fflow.source(videoURL)
 let audio = await fflow.source(audioURL)
-let newVideo = fflow.group([video, audio.trim({start: 10, duration: video.duration})])
+let trimAudio = audio.trim({start: 10, duration: video.duration})
+let newVideo = fflow.group([video, trimAudio])
 let outBlob = await newVideo.exportTo(Blob, {format: 'mp4', progress: onProgress})
 videoDom.src = URL.createObjectURL(outBlob)
 `
 
+
+
 function HomepageDemo() {
   const [code, setCode] = useState(demoCode)
-  const [progress, setProgress] = useState(0)
+  const [msg, setMsg] = useState('')
   const videoRef = useRef(null)
+  // preload
+  fflow.loadWASM()
 
   const onClick = () => {
+    setMsg(' ...')
     Function(`"use strict"; 
-      const {fflow, console, Blob, onProgress, videoDom} = this;
-      (async () => { ${code} })()
-    `).bind({fflow, console, Blob, onProgress: (p: number) => setProgress(p), videoDom: videoRef.current})()
+            const {fflow, console, Blob, onProgress, videoDom} = this;
+            (async () => { ${code} })()
+    `).bind({fflow, console, Blob, 
+      onProgress: (p: number) => setMsg(` (${(p*100).toFixed(1)}%)`), videoDom: videoRef.current})()
   }
 
   return (
@@ -72,7 +79,7 @@ function HomepageDemo() {
           
           <Button variant='warning' onClick={onClick} >
             <span>Click to Run</span>
-            {progress > 0 ? ` ${(progress*100).toFixed(1)}%` : ''}
+            {msg}
           </Button>
         </div>
         <div style={{display: 'flex', justifyContent: 'center'}}>

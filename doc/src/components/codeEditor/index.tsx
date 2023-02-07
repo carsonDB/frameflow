@@ -1,7 +1,7 @@
 import React, { CSSProperties } from 'react';
 import Editor from 'react-simple-code-editor';
 import { highlight, languages } from 'prismjs';
-import prismStyle from 'prismjs/themes/prism.css';
+// import prismStyle from 'prismjs/themes/prism.css';
 
 export default function CodeEditor(props: {children: string, onChange: (code: string) => void, style?: CSSProperties}) {
 

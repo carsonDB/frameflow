@@ -1,6 +1,7 @@
-# FrameFlow
+# [FrameFlow](https://frameflow.netlify.app/)
 An audio/video **stream** processing library for **JavaScript** world, based on WebAssembly and FFmpeg (libav*).
 It directly uses low-level C API from libav* folders in FFmepg, wrapped with C++ and compiled as WebAssembly module. In other words, reimplements the I/O and control logic, to really fit into JavaScript world.
+Learn more about [why frameflow](https://frameflow.netlify.app/blog/why-frameflow).
 
 👌Thus, it has three major advantages:
 - Stream in/out, plug in as a pipeline. Thus, no video size limiation, and stream processing.
@@ -32,8 +33,15 @@ More detailed browser demos are in the `./examples/browser/index.html`
 
 
 ## Install
-```
+
+### NPM
+```bash
 npm i frameflow
+```
+
+### HTML script
+```html
+<script src='https://unpkg.com/frameflow/dist/frameflow.min.js' ></script>
 ```
 
 ## Get started
@@ -123,11 +131,13 @@ They are smart enough to build and process.
 - trim(args: {start: number, duration: number}). In seconds.
 - setVolume(multiple: number). Multiple of input volume
 
-## Problems
-### Packet size
-### Speed
-### Limitation
+## [Problems](https://frameflow.netlify.app/blog/why-frameflow/#problems-of-frameflow)
 
+### Preload WASM binary
+By default, it will load wasm module on demand.
+However, since the wasm module size is ~22MB. You can preload it by calling `fflow.loadWASM()`.
+No matter how many times you call this function. FrameFlow only downloads once.
+So don't worry repetitively call this api.
 
 ## How to build
 *Warning: [webpack dev mode cannot hot reload in WSL2 (windows).](https://mbuotidem.github.io/blog/2021/01/09/how-to-hot-reload-auto-refresh-react-app-on-WSL.html)*
