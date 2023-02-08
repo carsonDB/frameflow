@@ -8,8 +8,8 @@ import pkgJSON from '../../package.json'
 
 const wasmFileName = `ffmpeg_built.wasm`
 
-// production wasm from remote CDN
-let DefaultURL = `https://unpkg.com/frameflow@${pkgJSON.version}/dist/${wasmFileName}`
+// production wasm (gzip) from remote CDN
+let DefaultURL = `https://unpkg.com/frameflow@${pkgJSON.version}/dist/${wasmFileName}.gz`
 
 // this if branch will be removed after built
 if (process.env.NODE_ENV == 'development') {
