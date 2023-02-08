@@ -1,7 +1,6 @@
 const path = require('path');
 const TerserPlugin = require("terser-webpack-plugin");
 const HtmlWebpackPlugin = require('html-webpack-plugin');
-const CompressionPlugin = require("compression-webpack-plugin");
 
 
 const basicConfig = {
@@ -37,11 +36,6 @@ const basicConfig = {
         globalObject: 'this',
         path: path.resolve(__dirname, 'dist'),
     },
-    plugins: [
-        new CompressionPlugin({
-            test: /\.wasm$/,
-        })
-    ]
 }
 
 
