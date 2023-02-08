@@ -20,6 +20,12 @@ import Worker from 'worker-loader?inline=no-fallback!./transcoder.worker.ts'
 const createWorker = () => new Worker()
 
 
+/**
+ * create `SourceTrackGroup` from various sources.
+ * @param src 
+ * @param options 
+ * @returns 
+ */
 async function createSource(src: SourceType, options?: {}) {
     const id = uuid() // temporarily node id for getMetadata
     // start a worker to probe data
@@ -326,5 +332,5 @@ const multipleFilter = {
 export default {
     source: createSource,
     ...multipleFilter,
-    loadWASM: () => loadWASM()
+    loadWASM
 }

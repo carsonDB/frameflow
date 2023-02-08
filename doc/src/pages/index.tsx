@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Link from '@docusaurus/Link';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import CodeEditor from '@site/src/components/codeEditor';
@@ -60,7 +60,7 @@ function HomepageDemo() {
   const [msg, setMsg] = useState('')
   const videoRef = useRef(null)
   // preload
-  fflow.loadWASM()
+  useEffect(() => { fflow.loadWASM() })
 
   const onClick = () => {
     setMsg(' ...')

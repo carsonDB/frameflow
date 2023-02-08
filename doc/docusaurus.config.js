@@ -70,12 +70,12 @@ const config = {
           src: 'img/home_icon.png',
         },
         items: [
-          // {
-          //   type: 'doc',
-          //   docId: 'intro',
-          //   position: 'left',
-          //   label: 'Tutorial',
-          // },
+          {
+            type: 'doc',
+            docId: 'api/index',
+            position: 'left',
+            label: 'Document',
+          },
           {to: '/blog', label: 'Blog', position: 'left'},
           {
             href: 'https://github.com/carsonDB/frameflow',
@@ -136,6 +136,17 @@ const config = {
     }),
 
     themes: ['@docusaurus/theme-live-codeblock'],
+
+    plugins: [
+      [
+        'docusaurus-plugin-typedoc',
+        // Plugin / TypeDoc options
+        {
+          entryPoints: ['../src/ts/main.ts'],
+          tsconfig: '../tsconfig.json',
+        },
+      ],
+    ]
 };
 
 module.exports = config;
