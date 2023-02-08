@@ -2,14 +2,14 @@
  * WASM Module manager
  * Note: this file import from built wasm files, which should be built beforehand.
  */
-
+import { inflate } from 'pako'
 // @ts-ignore
 import pkgJSON from '../../package.json'
 
 const wasmFileName = `ffmpeg_built.wasm`
 
 // production wasm (gzip) from remote CDN
-let DefaultURL = `https://unpkg.com/frameflow@${pkgJSON.version}/dist/${wasmFileName}.gz`
+let DefaultURL = `https://unpkg.com/frameflow@${pkgJSON.version}/dist/${wasmFileName}`
 
 // this if branch will be removed after built
 if (process.env.NODE_ENV == 'development') {
@@ -21,18 +21,19 @@ if (process.env.NODE_ENV == 'development') {
 let wasmPromise: Promise<ArrayBuffer> | undefined = undefined
 
 
-export function loadWASM(url: RequestInfo = DefaultURL, options?: RequestInit) {
+export function loadWASM(url: RequestInfo = DefaultURL, gzip=true) {
     if (wasmPromise) return wasmPromise
     
     console.log('Fetch WASM start...')
     // assign to global variable
-    wasmPromise = fetch(url, options)
-        .then(res => {
+    const gz = gzip ? '.gz' : ''
+    wasmPromise = fetch(url + gz)
+        .then(async res => {
             if (!res.ok) throw `WASM binary fetch failed.`
-            return res.arrayBuffer()
-        }).then(bytes => {
-            console.log(`Fetch WASM (${bytes.byteLength}) done.`)
-            return bytes
+            return {data: await res.arrayBuffer(), type: res.headers.get('Content-Type')}
+        }).then(({data, type}) => {
+            console.log(`Fetch WASM (${data.byteLength}) done.`)
+            return type?.includes('gzip') ? inflate(data) : data
         })
     
     return wasmPromise

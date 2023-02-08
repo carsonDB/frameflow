@@ -5,7 +5,7 @@ import mime from 'mime'
 import { v4 as uuid } from 'uuid'
 
 import { applyMulitpleFilter, applySingleFilter, Filter, FilterArgs } from "./filters"
-import { loadWASM } from './loader'
+import { loadWASM as _loadWASM } from './loader'
 import { FFWorker } from "./message"
 import { Exporter, Reader } from "./streamIO"
 import { DataBuffer, FormatMetadata, SourceNode, SourceType, StreamMetadata, StreamRef, TargetNode, WriteDataBuffer } from "./types/graph"
@@ -18,7 +18,6 @@ import Worker from 'worker-loader?inline=no-fallback!./transcoder.worker.ts'
 // const createWorker = () => new Worker(new URL('./transcoder.worker.ts', import.meta.url))
 /* use worker inline way to avoid bundle issue as dependency for further bundle. */
 const createWorker = () => new Worker()
-
 
 /**
  * create `SourceTrackGroup` from various sources.
@@ -140,7 +139,7 @@ class Track extends TrackGroup {
 }
 
 
-export class SourceTrackGroup extends TrackGroup {
+class SourceTrackGroup extends TrackGroup {
     node: SourceNode
     constructor(source: SourceType, streams: StreamMetadata[], format: FormatMetadata, fileSize: number) {
         const node: SourceNode = { type:'source', outStreams: streams, source,
@@ -314,23 +313,39 @@ async function createTargetNode(inStreams: StreamRef[], args: ExportArgs, worker
 
 
 
-const multipleFilter = {
-    /** 
-     * Track[] -> TrackGroup
-     */
-    group: (trackArr: (TrackGroup | Track)[]) => new TrackGroup(trackArr.map(t => t.streams).flat()),
-    /**
-     * multiple audio streams merge
-     */
-    merge: (trackArr: (TrackGroup | Track)[]) => 
-        new FilterTrackGroup({ type: 'merge' }, null, trackArr.map(t => t.streams)),
-    concat: (trackArr: (TrackGroup | Track)[]) => 
-        new FilterTrackGroup({ type: 'concat' }, null, trackArr.map(t => t.streams))
-}
 
+/////////////////////////////
+// All exports APIs are below.
+/////////////////////////////
 
-export default {
-    source: createSource,
-    ...multipleFilter,
-    loadWASM
-}
+/**
+ * 
+ * @param src 
+ * @param options 
+ * @returns 
+ */
+export const source = (src: SourceType, options?: {}) => createSource(src, options)
+
+/** 
+* Track[] -> TrackGroup
+*/
+export const group = (trackArr: (TrackGroup | Track)[]) => new TrackGroup(trackArr.map(t => t.streams).flat())
+
+/**
+ * multiple audio streams merge
+ */
+export const merge = (trackArr: (TrackGroup | Track)[]) => 
+    new FilterTrackGroup({ type: 'merge' }, null, trackArr.map(t => t.streams))
+
+export const concat = (trackArr: (TrackGroup | Track)[]) => 
+    new FilterTrackGroup({ type: 'concat' }, null, trackArr.map(t => t.streams))
+
+/**
+ * Preload of wasm binary file.
+ * 
+ * This function can be called multiple times, but only fetch once.
+ * So don't worry about repetitive calls.
+ * 
+ * @returns ArrayBuffer wasm binary
+ */
+export const loadWASM = () => _loadWASM()

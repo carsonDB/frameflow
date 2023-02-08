@@ -32,11 +32,16 @@ const basicConfig = {
         library: {
             name: 'frameflow',
             type: 'umd',
-            export: 'default',
+            // export: 'default',
         },
         globalObject: 'this',
         path: path.resolve(__dirname, 'dist'),
     },
+    plugins: [
+        new CompressionPlugin({
+            test: /\.wasm$/,
+        })
+    ]
 }
 
 
@@ -65,24 +70,23 @@ const prodConfig = {
         minimizer: [
             new TerserPlugin()
         ],
-    },
-    plugins: [
-        new CompressionPlugin({
-            test: /\.wasm$/,
-        })
-    ]
+    }
 }
 
 
 module.exports = (env, argv) => {
     const config = {...basicConfig}
+    const plugins = [...config.plugins??[]]
     if (argv.mode === 'development') {
+        plugins.push(...devConfig.plugins??[])
         Object.assign(config, devConfig)
     }
     else if (argv.mode === 'production') {
+        plugins.push(...prodConfig.plugins??[])
         Object.assign(config, prodConfig)
     }
     else throw `specify env`
 
-    return config
+
+    return {...config, plugins: plugins.length > 0 ? plugins : undefined}
 }

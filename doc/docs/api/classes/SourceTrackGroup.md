@@ -33,7 +33,7 @@ TrackGroup.constructor
 
 #### Defined in
 
-[src/ts/main.ts:145](https://github.com/carsonDB/frameflow/blob/aec10d5/src/ts/main.ts#L145)
+[src/ts/main.ts:145](https://github.com/carsonDB/frameflow/blob/8182d87/src/ts/main.ts#L145)
 
 ## Properties
 
@@ -43,7 +43,7 @@ TrackGroup.constructor
 
 #### Defined in
 
-[src/ts/main.ts:144](https://github.com/carsonDB/frameflow/blob/aec10d5/src/ts/main.ts#L144)
+[src/ts/main.ts:144](https://github.com/carsonDB/frameflow/blob/8182d87/src/ts/main.ts#L144)
 
 ___
 
@@ -57,7 +57,7 @@ TrackGroup.streams
 
 #### Defined in
 
-[src/ts/main.ts:51](https://github.com/carsonDB/frameflow/blob/aec10d5/src/ts/main.ts#L51)
+[src/ts/main.ts:51](https://github.com/carsonDB/frameflow/blob/8182d87/src/ts/main.ts#L51)
 
 ## Accessors
 
@@ -71,7 +71,7 @@ TrackGroup.streams
 
 #### Defined in
 
-[src/ts/main.ts:161](https://github.com/carsonDB/frameflow/blob/aec10d5/src/ts/main.ts#L161)
+[src/ts/main.ts:161](https://github.com/carsonDB/frameflow/blob/8182d87/src/ts/main.ts#L161)
 
 ___
 
@@ -85,7 +85,7 @@ ___
 
 #### Defined in
 
-[src/ts/main.ts:152](https://github.com/carsonDB/frameflow/blob/aec10d5/src/ts/main.ts#L152)
+[src/ts/main.ts:152](https://github.com/carsonDB/frameflow/blob/8182d87/src/ts/main.ts#L152)
 
 ## Methods
 
@@ -109,7 +109,7 @@ TrackGroup.export
 
 #### Defined in
 
-[src/ts/main.ts:86](https://github.com/carsonDB/frameflow/blob/aec10d5/src/ts/main.ts#L86)
+[src/ts/main.ts:86](https://github.com/carsonDB/frameflow/blob/8182d87/src/ts/main.ts#L86)
 
 ___
 
@@ -133,7 +133,7 @@ TrackGroup.exportTo
 
 #### Defined in
 
-[src/ts/main.ts:96](https://github.com/carsonDB/frameflow/blob/aec10d5/src/ts/main.ts#L96)
+[src/ts/main.ts:96](https://github.com/carsonDB/frameflow/blob/8182d87/src/ts/main.ts#L96)
 
 ▸ **exportTo**(`dest`): `Promise`<`DataBuffer`\>
 
@@ -153,7 +153,7 @@ TrackGroup.exportTo
 
 #### Defined in
 
-[src/ts/main.ts:97](https://github.com/carsonDB/frameflow/blob/aec10d5/src/ts/main.ts#L97)
+[src/ts/main.ts:97](https://github.com/carsonDB/frameflow/blob/8182d87/src/ts/main.ts#L97)
 
 ▸ **exportTo**(`dest`): `Promise`<`Blob`\>
 
@@ -174,7 +174,7 @@ TrackGroup.exportTo
 
 #### Defined in
 
-[src/ts/main.ts:98](https://github.com/carsonDB/frameflow/blob/aec10d5/src/ts/main.ts#L98)
+[src/ts/main.ts:98](https://github.com/carsonDB/frameflow/blob/8182d87/src/ts/main.ts#L98)
 
 ▸ **exportTo**(`dest`): `Promise`<`void`\>
 
@@ -194,7 +194,7 @@ TrackGroup.exportTo
 
 #### Defined in
 
-[src/ts/main.ts:99](https://github.com/carsonDB/frameflow/blob/aec10d5/src/ts/main.ts#L99)
+[src/ts/main.ts:99](https://github.com/carsonDB/frameflow/blob/8182d87/src/ts/main.ts#L99)
 
 ___
 
@@ -224,7 +224,7 @@ TrackGroup.filter
 
 #### Defined in
 
-[src/ts/main.ts:61](https://github.com/carsonDB/frameflow/blob/aec10d5/src/ts/main.ts#L61)
+[src/ts/main.ts:61](https://github.com/carsonDB/frameflow/blob/8182d87/src/ts/main.ts#L61)
 
 ___
 
@@ -248,7 +248,7 @@ TrackGroup.loop
 
 #### Defined in
 
-[src/ts/main.ts:79](https://github.com/carsonDB/frameflow/blob/aec10d5/src/ts/main.ts#L79)
+[src/ts/main.ts:79](https://github.com/carsonDB/frameflow/blob/8182d87/src/ts/main.ts#L79)
 
 ___
 
@@ -276,7 +276,7 @@ TrackGroup.setDataFormat
 
 #### Defined in
 
-[src/ts/main.ts:83](https://github.com/carsonDB/frameflow/blob/aec10d5/src/ts/main.ts#L83)
+[src/ts/main.ts:83](https://github.com/carsonDB/frameflow/blob/8182d87/src/ts/main.ts#L83)
 
 ___
 
@@ -300,7 +300,7 @@ TrackGroup.setVolume
 
 #### Defined in
 
-[src/ts/main.ts:80](https://github.com/carsonDB/frameflow/blob/aec10d5/src/ts/main.ts#L80)
+[src/ts/main.ts:80](https://github.com/carsonDB/frameflow/blob/8182d87/src/ts/main.ts#L80)
 
 ___
 
@@ -324,7 +324,7 @@ TrackGroup.tracks
 
 #### Defined in
 
-[src/ts/main.ts:70](https://github.com/carsonDB/frameflow/blob/aec10d5/src/ts/main.ts#L70)
+[src/ts/main.ts:70](https://github.com/carsonDB/frameflow/blob/8182d87/src/ts/main.ts#L70)
 
 ___
 
@@ -350,4 +350,4 @@ TrackGroup.trim
 
 #### Defined in
 
-[src/ts/main.ts:76](https://github.com/carsonDB/frameflow/blob/aec10d5/src/ts/main.ts#L76)
+[src/ts/main.ts:76](https://github.com/carsonDB/frameflow/blob/8182d87/src/ts/main.ts#L76)
