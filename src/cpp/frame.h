@@ -29,17 +29,44 @@ public:
     }
     ~Frame() { av_frame_free(&av_frame); }
 
+    bool key() const { return av_frame->key_frame; }
+    double doublePTS() const { return av_frame->pts; }
     std::string name() const { return _name; }
     int64_t pts() const { return av_frame->pts; }
     void set_pts(int64_t pts) { av_frame->pts = pts; }
 
+    void video_reinit(AVPixelFormat pix_fmt, int height, int width);
     void audio_reinit(AVSampleFormat sample_fmt, int sample_rate, uint64_t channel_layout, int nb_samples);
     
-    emscripten::val getData(int i) {
-        CHECK(i >= 0 && i < 8, "Frame::getData: plane_index not valid, [0, 8]");
-        return emscripten::val(emscripten::typed_memory_view(
-            av_frame->linesize[i] * av_frame->height, av_frame->data[i]));
-        // todo...get whole buffer
+    std::vector<emscripten::val> getPlanes() {
+        auto isVideo = av_frame->height > 0 && av_frame->width > 0 ? true : false;
+        std::vector<emscripten::val> data;
+        if (isVideo) {
+            size_t sizes[4] = {0};
+            // video frame only has max 4 planes
+            av_image_fill_plane_sizes(
+                sizes, (AVPixelFormat)av_frame->format, av_frame->height, (ptrdiff_t*)av_frame->linesize);
+            for (int i = 0; i < 4; i++) {
+                if (sizes[i] <= 0) break;
+                auto plane = val(typed_memory_view(sizes[i], av_frame->data[i]));
+                data.push_back(plane);
+            }
+        }
+        else {
+            // audio frame may has >8 planes (extended_data)
+            auto planar = av_sample_fmt_is_planar((AVSampleFormat)av_frame->format);
+            auto planes = planar ? av_frame->channels : 1;
+            for (int i = 0; i < planes; i++) {
+                auto size = av_samples_get_buffer_size(
+                    &av_frame->linesize[0], av_frame->channels, 
+                    av_frame->nb_samples, (AVSampleFormat)av_frame->format, 0);
+                auto plane = val(typed_memory_view((size_t)av_frame->linesize[0], av_frame->extended_data[i]));
+                CHECK(size < 0, "failed on av_samples_get_buffer_size");
+                data.push_back(plane);
+            }
+        }
+        
+        return data;
     }
 
     void dump() {

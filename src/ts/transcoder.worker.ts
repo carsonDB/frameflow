@@ -5,7 +5,7 @@ import { DataBuffer, GraphConfig, Rational, SourceConfig, StreamConfigRef, Strea
 
 
 const streamId = (nodeId: string, streamIndex: number) => `${nodeId}:${streamIndex}`
-const vec2Array = <T>(vec: StdVector<T>) => {
+export const vec2Array = <T>(vec: StdVector<T>) => {
     const arr: T[] = []
     for (let i = 0; i < vec.size(); i++) {
         arr.push(vec.get(i))
@@ -47,6 +47,11 @@ interface GraphRuntime {
     ffmpeg: FFmpegModule
 }
 let graph: GraphRuntime | null = null
+
+export function getFFmpeg() {
+    if (!graph) throw `GraphRuntime hasn't built, cannot get FFmpegModule`
+    return graph.ffmpeg
+}
 
 // initiantate wasm module
 async function loadModule(wasmBinary: ArrayBuffer) {

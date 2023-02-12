@@ -9,6 +9,13 @@ extern "C" {
 }
 
 
+struct TimeInfo {
+    double pts;
+    double dts;
+    double duration;
+};
+
+
 class Packet {
     AVPacket* packet;
 public:
@@ -21,6 +28,8 @@ public:
     
     ~Packet() { av_packet_free(&packet); };
     
+    bool key() const { return packet->flags | AV_PKT_FLAG_KEY; }
+
     int size() const { return packet->size; }
     
     int stream_index() const { return packet->stream_index; }
@@ -29,6 +38,10 @@ public:
     
     emscripten::val getData() { 
         return emscripten::val(emscripten::typed_memory_view(packet->size, packet->data)); // check length of data
+    }
+
+    TimeInfo getTimeInfo() {
+        return {.pts = (double)packet->pts, .dts = (double)packet->dts, .duration = (double)packet->duration};
     }
 
     void dump() {

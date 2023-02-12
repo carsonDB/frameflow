@@ -3,7 +3,7 @@
 
 
 
-interface AVRational { num: number, den: number }
+export interface AVRational { num: number, den: number }
 
 interface StdVector<T> {
     size(): number
@@ -89,19 +89,29 @@ interface DataFormat {
 }
 
 // packet
+interface TimeInfo {
+    pts: number, dts: number, duration: number
+}
 class Packet {
     constructor()
-    constructor(bufSize: number, pts: number)
+    constructor(bufSize: number, timeInfo: TimeInfo)
     size: number
+    key: boolean
     get streamIndex(): number
     getData(): Uint8Array
+    getTimeInfo(): TimeInfo
     dump():void
     delete(): void
 }
 
 // frame
 class Frame {
-    getData(plane_index: number): Uint8Array
+    constructor(pts: number);
+    getPlanes(): StdVector<Uint8Array>
+    videoReInit(format: string, height: number, width: number): void
+    audioReInit(format: string, sample_fmt, sample_rate: number, channel_layout: string, nb_samples: number): void
+    key: boolean
+    pts: number
     dump():void
     delete(): void
     name: string

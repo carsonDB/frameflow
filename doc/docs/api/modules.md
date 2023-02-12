@@ -12,6 +12,9 @@ custom_edit_url: null
 
 ▸ **concat**(`trackArr`): `FilterTrackGroup`
 
+Concat multiple tracks along timeline.
+Currently only support
+
 #### Parameters
 
 | Name | Type |
@@ -24,7 +27,7 @@ custom_edit_url: null
 
 #### Defined in
 
-[main.ts:340](https://github.com/carsonDB/frameflow/blob/8182d87/src/ts/main.ts#L340)
+[main.ts:348](https://github.com/carsonDB/frameflow/blob/b5c737d/src/ts/main.ts#L348)
 
 ___
 
@@ -32,6 +35,8 @@ ___
 
 ▸ **group**(`trackArr`): `TrackGroup`
 
+Convert array of Track or TrackGroup into one TrackGroup.
+This is convenient when we need to apply operations on multiple tracks.
 Track[] -> TrackGroup
 
 #### Parameters
@@ -46,7 +51,7 @@ Track[] -> TrackGroup
 
 #### Defined in
 
-[main.ts:332](https://github.com/carsonDB/frameflow/blob/8182d87/src/ts/main.ts#L332)
+[main.ts:334](https://github.com/carsonDB/frameflow/blob/b5c737d/src/ts/main.ts#L334)
 
 ___
 
@@ -67,7 +72,7 @@ ArrayBuffer wasm binary
 
 #### Defined in
 
-[main.ts:351](https://github.com/carsonDB/frameflow/blob/8182d87/src/ts/main.ts#L351)
+[main.ts:359](https://github.com/carsonDB/frameflow/blob/b5c737d/src/ts/main.ts#L359)
 
 ___
 
@@ -75,7 +80,7 @@ ___
 
 ▸ **merge**(`trackArr`): `FilterTrackGroup`
 
-multiple audio streams merge
+Multiple audio tracks merge into one audio track.
 
 #### Parameters
 
@@ -89,7 +94,7 @@ multiple audio streams merge
 
 #### Defined in
 
-[main.ts:337](https://github.com/carsonDB/frameflow/blob/8182d87/src/ts/main.ts#L337)
+[main.ts:339](https://github.com/carsonDB/frameflow/blob/b5c737d/src/ts/main.ts#L339)
 
 ___
 
@@ -97,17 +102,21 @@ ___
 
 ▸ **source**(`src`, `options?`): `Promise`<`SourceTrackGroup`\>
 
+Create source (`SourceTrackGroup`) in one function.
+
 #### Parameters
 
-| Name | Type |
-| :------ | :------ |
-| `src` | `SourceType` |
-| `options?` | `Object` |
+| Name | Type | Description |
+| :------ | :------ | :------ |
+| `src` | `SourceType` | ReadableStream<Uint8Array \| Buffer> \| string \| URL \| Request \| Blob \| Buffer \| Uint8Array |
+| `options?` | `Object` | unused temporarily |
 
 #### Returns
 
 `Promise`<`SourceTrackGroup`\>
 
+SourceTrackGroup can be used further.
+
 #### Defined in
 
-[main.ts:327](https://github.com/carsonDB/frameflow/blob/8182d87/src/ts/main.ts#L327)
+[main.ts:327](https://github.com/carsonDB/frameflow/blob/b5c737d/src/ts/main.ts#L327)

@@ -1,6 +1,16 @@
 #include "frame.h"
 
 
+void Frame::video_reinit(AVPixelFormat pix_fmt, int height, int width) {
+    av_frame_unref(av_frame);
+    av_frame->format = pix_fmt;
+    av_frame->height = height;
+    av_frame->width = width;
+    
+    auto ret = av_frame_get_buffer(av_frame, 0);
+    CHECK(ret >= 0, "Could not allocate output frame samples (error '%s')");
+}
+
 void Frame::audio_reinit(AVSampleFormat sample_fmt, int sample_rate, uint64_t channel_layout, int nb_samples) {
     av_frame_unref(av_frame);
     av_frame->channel_layout = channel_layout;

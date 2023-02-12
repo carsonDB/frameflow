@@ -3,12 +3,15 @@ An audio/video **stream** processing library for **JavaScript** world, based on 
 It directly uses low-level C API from libav* folders in FFmepg, wrapped with C++ and compiled as WebAssembly module. In other words, reimplements the I/O and control logic, to really fit into JavaScript world.
 Learn more about [why frameflow](https://frameflow.netlify.app/blog/why-frameflow).
 
-👌Thus, it has three major advantages:
+## Features
+- Get detailed metadata of video file by reading only several chunks, either from local disk or remote url.
 - Stream in/out, plug in as a pipeline. Thus, no video size limiation, and stream processing.
 For example, we can download, process and upload at the same time.
 - Processing speed can be controlled either automatically or manually.
 For example, export a video to a canvas as playing a video.
-- Use JavaScript chaining style to build filter graphs, which is both easy and flexible.
+- Use JavaScript chaining style to build filter graphs, which is both intuitive and flexible.
+- *TODO*: use WebCodecs to have near-native speed when browsers support mainstream codecs.
+- *TODO*: support videoFrame/audioData (uncompressed) stream as input or output.
 
 ⚠️ Note: current verison is at **prototype** stage. Only **web browser** examples are tested.
 Nodejs hasn't been tested yet.
@@ -133,9 +136,8 @@ They are smart enough to build and process.
 
 ### Preload WASM binary
 By default, it will load wasm module on demand.
-However, since the wasm module size is ~22MB. You can preload it by calling `fflow.loadWASM()`.
-No matter how many times you call this function. FrameFlow only downloads once.
-So don't worry repetitively call this api.
+However, since the wasm module size is ~22MB, downloaded size gzip ~8MB. You can preload it by calling [`fflow.loadWASM()`](https://frameflow.netlify.app/docs/api/modules#loadwasm).
+
 
 
 ## [Problems](https://frameflow.netlify.app/blog/why-frameflow/#problems-of-frameflow)

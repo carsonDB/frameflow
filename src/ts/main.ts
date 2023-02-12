@@ -319,24 +319,31 @@ async function createTargetNode(inStreams: StreamRef[], args: ExportArgs, worker
 /////////////////////////////
 
 /**
- * 
- * @param src 
- * @param options 
- * @returns 
+ * Create source (`SourceTrackGroup`) in one function. 
+ * @param src ReadableStream<Uint8Array | Buffer> | string | URL | Request | Blob | Buffer | Uint8Array
+ * @param options unused temporarily
+ * @returns SourceTrackGroup can be used further.
  */
 export const source = (src: SourceType, options?: {}) => createSource(src, options)
 
 /** 
+* Convert array of Track or TrackGroup into one TrackGroup.
+* This is convenient when we need to apply operations on multiple tracks.
 * Track[] -> TrackGroup
 */
 export const group = (trackArr: (TrackGroup | Track)[]) => new TrackGroup(trackArr.map(t => t.streams).flat())
 
 /**
- * multiple audio streams merge
+ * Multiple audio tracks merge into one audio track.
  */
 export const merge = (trackArr: (TrackGroup | Track)[]) => 
     new FilterTrackGroup({ type: 'merge' }, null, trackArr.map(t => t.streams))
 
+/**
+ * Concat multiple tracks along timeline.
+ * @param trackArr 
+ * @returns 
+ */
 export const concat = (trackArr: (TrackGroup | Track)[]) => 
     new FilterTrackGroup({ type: 'concat' }, null, trackArr.map(t => t.streams))
 

@@ -28,8 +28,17 @@ interface CommonStreamMetadata {
     codecName: string,
 }
 
+/**
+ * Video Track (stream) metadata
+ */
 export interface VideoStreamMetadata extends CommonStreamMetadata {
+    /**
+     * mediaType = 'video' or 'audio'
+     */
     mediaType: 'video'
+    /**
+     * height of video frame
+     */
     height: number,
     width: number,
     pixelFormat: string

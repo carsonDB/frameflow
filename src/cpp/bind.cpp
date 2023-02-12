@@ -79,9 +79,11 @@ EMSCRIPTEN_BINDINGS(packet) {
     class_<Packet>("Packet")
         .constructor<>()
         .constructor<int, int64_t>()
+        .property("key", &Packet::key)
         .property("size", &Packet::size)
         .property("streamIndex", &Packet::stream_index)
         .function("getData", &Packet::getData)
+        .function("getTimeInfo", &Packet::getTimeInfo)
         .function("dump", &Packet::dump)
     ;
 }
@@ -89,8 +91,10 @@ EMSCRIPTEN_BINDINGS(packet) {
 EMSCRIPTEN_BINDINGS(frame) {
     class_<Frame>("Frame")
         // .constructor<FrameParams>()
+        .property("key", &Frame::key)
+        .property("pts", &Frame::doublePTS)
         .property("name", &Frame::name)
-        .function("getData", &Frame::getData)
+        .function("getData", &Frame::getPlanes)
         .function("dump", &Frame::dump)
     ;
 }
@@ -147,6 +151,7 @@ EMSCRIPTEN_BINDINGS(utils) {
 
 	register_vector<Frame*>("vector<Frame>");
 	register_vector<Packet*>("vector<Packet>");
+    register_vector<emscripten::val>("vector<val>");
 	register_vector<StreamInfo>("vector<StreamInfo>");
     register_map<std::string, std::string>("MapStringString");
 
