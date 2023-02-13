@@ -130,7 +130,7 @@ await video.trim({start: 1, duration: video.duration}).setVolume(0.5).exportTo('
 This example apply `trim` and `setVolume` filter operations which support chainable operation.
 Each filter operation returns a new TrackGroup.
 
-More [documents](https://frameflow.netlify.app/docs/Introduction/getStarted) are available.
+More [documents](https://frameflow.netlify.app/docs/intro/getStarted) are available.
 
 ## [Problems](https://frameflow.netlify.app/blog/why-frameflow/#problems-of-frameflow)
 

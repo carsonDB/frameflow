@@ -26,7 +26,7 @@ Concat multiple tracks along timeline.
 
 #### Defined in
 
-[main.ts:347](https://github.com/carsonDB/frameflow/blob/62fbf5d/src/ts/main.ts#L347)
+[main.ts:347](https://github.com/carsonDB/frameflow/blob/0e0f950/src/ts/main.ts#L347)
 
 ___
 
@@ -50,7 +50,7 @@ Track[] -> TrackGroup
 
 #### Defined in
 
-[main.ts:334](https://github.com/carsonDB/frameflow/blob/62fbf5d/src/ts/main.ts#L334)
+[main.ts:334](https://github.com/carsonDB/frameflow/blob/0e0f950/src/ts/main.ts#L334)
 
 ___
 
@@ -71,7 +71,7 @@ ArrayBuffer wasm binary
 
 #### Defined in
 
-[main.ts:358](https://github.com/carsonDB/frameflow/blob/62fbf5d/src/ts/main.ts#L358)
+[main.ts:358](https://github.com/carsonDB/frameflow/blob/0e0f950/src/ts/main.ts#L358)
 
 ___
 
@@ -93,7 +93,7 @@ Multiple audio tracks merge into one audio track.
 
 #### Defined in
 
-[main.ts:339](https://github.com/carsonDB/frameflow/blob/62fbf5d/src/ts/main.ts#L339)
+[main.ts:339](https://github.com/carsonDB/frameflow/blob/0e0f950/src/ts/main.ts#L339)
 
 ___
 
@@ -118,4 +118,4 @@ SourceTrackGroup can be used further.
 
 #### Defined in
 
-[main.ts:327](https://github.com/carsonDB/frameflow/blob/62fbf5d/src/ts/main.ts#L327)
+[main.ts:327](https://github.com/carsonDB/frameflow/blob/0e0f950/src/ts/main.ts#L327)
