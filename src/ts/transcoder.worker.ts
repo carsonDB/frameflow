@@ -419,7 +419,7 @@ class VideoSourceReader {
 class ImageSourceReader {
     node: SourceConfig
     count: number = 0
-    // fps: number // todo... different time_base
+    fps: number // todo... different time_base
     decoder: ModuleType['Decoder']
     Packet: FFmpegModule['Packet']
     #inputIO: InputIO
@@ -429,7 +429,7 @@ class ImageSourceReader {
         this.node = node
         if (node.outStreams.length != 1 || node.outStreams[0].mediaType != 'video') 
             throw `ImageSourceReader only allow one video stream`
-        // this.fps = node.outStreams[0].frameRate
+        this.fps = node.outStreams[0].frameRate
         this.#inputIO = new InputIO(node.id)
         const stream = node.outStreams[0]
         const params = `codec_name:${stream.codecName};height:${stream.height};width:${stream.width}`
@@ -452,7 +452,8 @@ class ImageSourceReader {
         else if (!image) return []
         const pts = this.count
         this.count += 1
-        const pkt = new this.Packet(image.byteLength, pts)
+        const duration = 1 / this.fps
+        const pkt = new this.Packet(image.byteLength, {pts, dts: pts, duration})
         pkt.getData().set(new Uint8Array(image))
         const frames = this.decoder.decode(pkt)
         return vec2Array(frames)

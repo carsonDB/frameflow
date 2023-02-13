@@ -71,9 +71,25 @@
             const onProgress = pg => document.getElementById('mux-progress').textContent = `${(pg*100).toFixed(2)}%`
             const video = await fflow.source('./assets/flame.avi')
             const audio = await fflow.source('./assets/audio.mp3')
-            const output = fflow.group([video, audio.trim({start: 2, duration: video.duration})])
+            const bgm = audio.setVolume(2)
+                             .trim({start: 2, duration: 0.5})
+                             .loop(video.duration)
+            const output = fflow.group([video, bgm])
             const blob = await output.exportTo(Blob, {format: 'mp4', progress: onProgress}) 
             document.getElementById('mux-video').src = URL.createObjectURL(blob)
+        }
+    </script>
+
+    <h2>👉mp4 to webm (slow)</h2>
+    <video id="mp4-webm-video" controls></video><br />
+    <button id="mp4-webm-transcode">Transcode</button>
+    <span id="mp4-webm-progress"></span>
+    <script>
+        document.getElementById('mp4-webm-transcode').onclick = async () => {
+            const onProgress = pg => document.getElementById('mp4-webm-progress').textContent = `${(pg*100).toFixed(2)}%`
+            const video = await fflow.source('./assets/Bunny.mp4')
+            const blob = await video.exportTo(Blob, {format: 'webm', progress: onProgress}) 
+            document.getElementById('mp4-webm-video').src = URL.createObjectURL(blob)
         }
     </script>
 
@@ -93,7 +109,7 @@
             console.log(vidSrc.metadata)
             const output = vidSrc
 
-            const target = await output.export({format: 'mp4', progress: onProgress})
+            const target = await output.export({format: 'webm', progress: onProgress})
             let size = 0
             for await (let chunk of target) {
                 size += chunk.data.byteLength

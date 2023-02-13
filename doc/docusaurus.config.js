@@ -72,13 +72,13 @@ const config = {
         items: [
           {
             type: 'doc',
-            docId: 'tutorial/index',
+            docId: 'Introduction/getStarted',
             position: 'left',
-            label: 'Tutorial',
+            label: 'Docs',
           },
           {
             type: 'doc',
-            docId: 'api/index',
+            docId: 'API/index',
             position: 'left',
             label: 'API',
           },
@@ -150,6 +150,7 @@ const config = {
         {
           entryPoints: ['../src/ts/main.ts'],
           tsconfig: '../tsconfig.json',
+          out: 'API',
         },
       ],
     ]

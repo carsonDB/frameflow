@@ -5,8 +5,6 @@ import CodeEditor from '@site/src/components/codeEditor';
 import HomepageFeatures from '@site/src/components/HomepageFeatures';
 import Frameflow_diagram from '@site/static/img/diagram.png';
 import Layout from '@theme/Layout';
-import Button from 'react-bootstrap/Button';
-import 'bootstrap/dist/css/bootstrap.min.css';
 import clsx from 'clsx';
 import fflow from 'frameflow';
 
@@ -20,14 +18,14 @@ function HomepageHeader() {
         <h1 className="hero__title">{siteConfig.title}</h1>
         <p className="hero__subtitle">{siteConfig.tagline}</p>
         <img src={Frameflow_diagram} title="FramFlow diagram" className="diagram" />
-        <div className={styles.buttons}>
+        <div >
           <Link
-            className="button button--secondary button--lg"
-            to="/blog/why-frameflow">
-            Why FrameFlow
+            className="button button--secondary button--lg margin--md"
+            to="/docs/Introduction/getStarted">
+            Get Started
           </Link>
           <Link
-            className="button button--secondary button--lg"
+            className="button button--secondary button--lg margin--md"
             to="#HomepageDemo">
             Try a demo
           </Link>
@@ -76,11 +74,10 @@ function HomepageDemo() {
         <div style={{textAlign: 'center'}}>
           <h1 className="hero__title">Try a demo</h1>
           <h4>Trim a audio and group with avi video, to mp4 file, which can play in HTMLVideoElement.</h4>
-          
-          <Button variant='warning' onClick={onClick} >
+          <button className='button button--warning margin--md' onClick={onClick} >
             <span>Click to Run</span>
             {msg}
-          </Button>
+          </button>
         </div>
         <div style={{display: 'flex', justifyContent: 'center'}}>
             <video controls src={demoVideoURL} ref={videoRef} />

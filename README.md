@@ -13,9 +13,8 @@ For example, export a video to a canvas as playing a video.
 - *TODO*: use WebCodecs to have near-native speed when browsers support mainstream codecs.
 - *TODO*: support videoFrame/audioData (uncompressed) stream as input or output.
 
-⚠️ Note: current verison is at **prototype** stage. Only **web browser** examples are tested.
-Nodejs hasn't been tested yet.
-And almost everything is under optimization. You words will shape the future of FrameFlow.
+⚠️ Note: **web browser** examples are tested. Nodejs hasn't been tested yet.
+There are many places that need to optimize. You words will shape the future of FrameFlow.
 
 ## Demo
 
@@ -124,20 +123,7 @@ await video.trim({start: 1, duration: video.duration}).setVolume(0.5).exportTo('
 This example apply `trim` and `setVolume` filter operations which support chainable operation.
 Each filter operation returns a new TrackGroup.
 
-⚠️ Note that there are some difference between these filter operations and FFmpeg filters.
-They are not one-to-one correspondence.
-For example, in FFmpeg, we apply `trim` to video track (stream) and `atrim` to audio track (stream).
-But here, `TrackGroup.trim()` apply either `trim` or `atrim` to each internal track (stream).
-They are smart enough to build and process.
-
-#### Filters API
-- trim(args: {start: number, duration: number}). In seconds.
-- setVolume(multiple: number). Multiple of input volume
-
-### Preload WASM binary
-By default, it will load wasm module on demand.
-However, since the wasm module size is ~22MB, downloaded size gzip ~8MB. You can preload it by calling [`fflow.loadWASM()`](https://frameflow.netlify.app/docs/api/modules#loadwasm).
-
+More [documents](https://frameflow.netlify.app/docs/Introduction/getStarted) are available.
 
 
 ## [Problems](https://frameflow.netlify.app/blog/why-frameflow/#problems-of-frameflow)
