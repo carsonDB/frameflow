@@ -1,3 +1,7 @@
+/**
+ * Unified WebCodecs (Web*) and FFmpeg (FF*) encoder/decoder/packet/frame.
+ * TODO...
+ */
 import { getFFmpeg, vec2Array } from './transcoder.worker'
 import * as FF from './types/ffmpeg'
 import { AVRational } from './types/ffmpeg'

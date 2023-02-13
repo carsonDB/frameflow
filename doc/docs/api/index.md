@@ -1,3 +1,11 @@
+---
+id: "index"
+title: "frameflow"
+sidebar_label: "Readme"
+sidebar_position: 0
+custom_edit_url: null
+---
+
 # [FrameFlow](https://frameflow.netlify.app/)
 An audio/video **stream** processing library for **JavaScript** world, based on WebAssembly and FFmpeg (libav*).
 It directly uses low-level C API from libav* folders in FFmepg, wrapped with C++ and compiled as WebAssembly module. In other words, reimplements the I/O and control logic, to really fit into JavaScript world.
@@ -32,7 +40,6 @@ Although this example writes to blob entirely, then play.
 But underhood, it streams out chunks and then put togather.
 
 More detailed browser demos are in the `./examples/browser/index.html`
-
 
 ## Install
 
@@ -123,11 +130,9 @@ await video.trim({start: 1, duration: video.duration}).setVolume(0.5).exportTo('
 This example apply `trim` and `setVolume` filter operations which support chainable operation.
 Each filter operation returns a new TrackGroup.
 
-More [documents](https://frameflow.netlify.app/docs/intro/getStarted) are available.
-
+More [documents](https://frameflow.netlify.app/docs/Introduction/getStarted) are available.
 
 ## [Problems](https://frameflow.netlify.app/blog/why-frameflow/#problems-of-frameflow)
-
 
 ## How to build
 *Warning: [webpack dev mode cannot hot reload in WSL2 (windows).](https://mbuotidem.github.io/blog/2021/01/09/how-to-hot-reload-auto-refresh-react-app-on-WSL.html)*
@@ -172,4 +177,3 @@ git clone https://github.com/webmproject/libvpx.git --depth 1 --branch v1.12.0
 ./build_ffmpeg.sh
 ./build_wasm.sh
 ```
-

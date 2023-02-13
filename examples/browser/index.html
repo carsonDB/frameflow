@@ -73,14 +73,14 @@
             const audio = await fflow.source('./assets/audio.mp3')
             const bgm = audio.setVolume(2)
                              .trim({start: 2, duration: 0.5})
-                             .loop(video.duration)
+                             .loop(video.duration) // bug...
             const output = fflow.group([video, bgm])
             const blob = await output.exportTo(Blob, {format: 'mp4', progress: onProgress}) 
             document.getElementById('mux-video').src = URL.createObjectURL(blob)
         }
     </script>
 
-    <h2>👉mp4 to webm (slow)</h2>
+    <h2>👉mp4 to webm (todo...slow)</h2>
     <video id="mp4-webm-video" controls></video><br />
     <button id="mp4-webm-transcode">Transcode</button>
     <span id="mp4-webm-progress"></span>
