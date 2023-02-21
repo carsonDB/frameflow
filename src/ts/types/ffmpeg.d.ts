@@ -48,7 +48,7 @@ interface FormatInfo {
 // decode
 class Decoder {
     constructor(dexmuer: Demuxer, streamIndex: number, name: string)
-    constructor(params: string, name: string)
+    constructor(streamInfo: StreamInfo, name: string)
     name: number
     get timeBase(): AVRational
     get dataFormat(): DataFormat
@@ -105,11 +105,20 @@ class Packet {
 }
 
 // frame
+interface FrameInfo {
+    format: string
+    height: number
+    width: number
+    sampleRate: number
+    channels: number
+    channelLayout: string;
+    nbSamples: number;
+}
+
 class Frame {
-    constructor(pts: number);
+    constructor(info: FrameInfo, pts: number, name: string);
+    getFrameInfo(): FrameInfo
     getPlanes(): StdVector<Uint8Array>
-    videoReInit(format: string, height: number, width: number): void
-    audioReInit(format: string, sample_fmt, sample_rate: number, channel_layout: string, nb_samples: number): void
     key: boolean
     pts: number
     dump():void
@@ -157,6 +166,7 @@ class Muxer {
     static inferFormatInfo(format: string, filename: string): InferredFormatInfo
     dump(): void
     newStream(encoder: Encoder, time_base): void
+    newStream(streamInfo: StreamInfo): void
     // openIO(): void
     writeHeader(): void
     writeTrailer(): void

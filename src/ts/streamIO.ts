@@ -1,13 +1,12 @@
+import { SourceStream } from './globals'
 import { buildGraphConfig } from './graph'
 import { loadWASM } from './loader'
 import { FFWorker } from "./message"
-import { DataBuffer, SourceType, TargetNode, WriteDataBuffer } from "./types/graph"
+import { ChunkData, SourceNode, SourceType, TargetNode, WriteChunkData } from "./types/graph"
 import { isBrowser, isNode } from './utils'
 
 
-export type SourceStream = ReadableStream<DataBuffer> | NodeJS.ReadableStream
-type SourceStreamReader = ReadableStreamDefaultReader<DataBuffer> | NodeJS.ReadableStream
-type SourceStreamCreator = (seekPos: number) => Promise<SourceStream>
+type SourceStreamCreator = (seekPos: number) => Promise<SourceStream<ChunkData>>
 
 
 async function fetchSourceInfo(url: URL | RequestInfo): Promise<{size: number, url: string}> {
@@ -23,7 +22,7 @@ async function fetchSourceInfo(url: URL | RequestInfo): Promise<{size: number, u
 }
 
 
-async function getSourceInfo(src: SourceType): Promise<{size: number, url?: string}> {
+export async function getSourceInfo(src: SourceType): Promise<{size: number, url?: string}> {
     if (typeof src == 'string') {
         if (isNode) {
             try {
@@ -55,14 +54,14 @@ async function getSourceInfo(src: SourceType): Promise<{size: number, url?: stri
 }
 
 
-async function fetchSourceData(url: RequestInfo | URL, startPos: number): Promise<SourceStream> {
+async function fetchSourceData(url: RequestInfo | URL, startPos: number): Promise<SourceStream<ChunkData>> {
     const { body, headers } = await fetch(url, { headers: { range: `bytes=${startPos}-` } })
     if (!body) throw `cannot fetch source url: ${url}`
-    return body
+    return new SourceStream(body)
 }
 
-/* convert any quanlified src into creator of readableStream<DataBuffer> */
-const sourceToStreamCreator = (src: SourceType): SourceStreamCreator => async (seekPos: number) => {
+/* convert any quanlified src into creator of SourceStream<DataBuffer> */
+export const sourceToStreamCreator = (src: SourceType): SourceStreamCreator => async (seekPos: number) => {
     if (typeof src == 'string') {
         if (isNode) {
             try {
@@ -70,7 +69,7 @@ const sourceToStreamCreator = (src: SourceType): SourceStreamCreator => async (s
             } catch {
                 // check if local file exits
                 const { createReadStream } = require('fs').promises
-                return createReadStream(src) as NodeJS.ReadStream
+                return new SourceStream(createReadStream(src) as NodeJS.ReadStream)
             }    
         }
         else if (isBrowser) {
@@ -81,18 +80,18 @@ const sourceToStreamCreator = (src: SourceType): SourceStreamCreator => async (s
         return await fetchSourceData(src, seekPos)
     }
     else if (src instanceof Blob) {
-        return src.slice(seekPos).stream()
+        return new SourceStream(src.slice(seekPos).stream())
     }
     else if (src instanceof ReadableStream) { // ignore seekPos
-        return src
+        return new SourceStream(src)
     }
     else if (src instanceof ArrayBuffer || (isNode && src instanceof Buffer)) {
-        return new ReadableStream({ 
+        return new SourceStream(new ReadableStream({ 
                 start(s) { 
                     s.enqueue(new Uint8Array(src.slice(seekPos))) 
                     s.close()
                 }
-            })
+            }))
     }
 
     throw `cannot read source: "${src}", type: "${typeof src}, as stream input."`
@@ -100,18 +99,16 @@ const sourceToStreamCreator = (src: SourceType): SourceStreamCreator => async (s
 
 
 
-export class Reader {
+export class FileReader {
     #id: string
     #url = '' // todo.. send empty name
     source: SourceType
     streamCreator: SourceStreamCreator
-    stream: SourceStream | undefined = undefined
-    reader: SourceStreamReader | undefined = undefined
-    fullSize: number = 0
+    stream: SourceStream<ChunkData> | undefined = undefined
+    // fullSize: number = 0
     worker: FFWorker
-    #dataReady: boolean = false
-    #ondataReady = () => {} // callback when new data available
-    end = false
+    // #dataReady: boolean = false
+    // #ondataReady = () => {} // callback when new data available
  
     constructor(id: string, source: SourceType, worker: FFWorker) {
         this.#id = id
@@ -121,82 +118,135 @@ export class Reader {
         this.#enableReply()
     }
 
-    async build() {
-        const {size, url} = await getSourceInfo(this.source)
-        this.#url = url ?? ""
-        this.fullSize = size
-        await this.createStream(0)
-    }
+    // async build() {
+    //     const {size, url} = await getSourceInfo(this.source)
+    //     this.#url = url ?? ""
+        // this.fullSize = size
+    //     await this.createStream(0)
+    // }
     
     #enableReply() {
         
         this.worker.reply('read', async () => {
-            const data = await this.readFromStream()
-            this.#dataReady = false
+            // create stream for the first time
+            const stream = this.stream ?? (await this.streamCreator(0))
+            const data = await stream.read()
+            // this.#dataReady = false
             // call after sended data
-            setTimeout(() => {
-                this.#ondataReady()
-                this.#ondataReady = () => {} // only call once
-            }, 0)
-            this.#dataReady = true
+            // setTimeout(() => {
+            //     this.#ondataReady()
+            //     this.#ondataReady = () => {} // only call once
+            // }, 0)
+            // this.#dataReady = true
 
             return {inputs: data ? [data] : []}
         }, this.#id)
 
         this.worker.reply('seek', async ({pos}) => { 
-            await this.createStream(pos)
+            await this.streamCreator(pos)
         }, this.#id)
     }
 
     get url() { return this.#url ?? '' }
+
+    get end() { return this.stream?.end ?? true }
     
-    async createStream(seekPos: number) {
-        const stream = await this.streamCreator(seekPos)
+    // /* worker has already had data */
+    // async dataReady() {
+    //     if (this.#dataReady) return
+    //     return new Promise<void>((resolve) => {
+    //         this.#ondataReady = () => resolve()
+    //     })
+    // }
+
+    cache(source: SourceNode) { 
+        this.worker.close()
+        source2Reader.set(source, this) 
+    }
+}
+
+
+export class StreamReader {
+    cacheData: ChunkData[] = []
+    #id: string
+    worker: FFWorker
+    stream: SourceStream<ChunkData>
+
+    constructor(id: string, stream: SourceStream<ChunkData>, worker: FFWorker) {
+        this.#id = id
+        this.worker = worker
         this.stream = stream
-        if ('getReader' in stream)
-            this.reader = stream.getReader()
-        else {
-            this.reader = stream
-            if (!stream.isPaused()) throw `nodejs stream must be in paused mode`
-            stream.on('end', () => this.end = true)
-        }
-
-        return {stream: this.stream, reader: this.reader}
+        this.#enableReply()
     }
 
-    /* unify nodejs and browser streams */
-    async readFromStream(): Promise<DataBuffer | undefined> {
-        // create stream and reader for the first time
-        if (!this.reader) throw `async build first`
-        if ('readable' in this.reader) {
-            if (this.reader.readable) {
-                const output = this.reader.read()
-                if (typeof output == 'string') throw `cannot get string from source stream`
-                return output
-            }
-            else {
-                const stream = this.reader
-                return new Promise((resolve, reject) => {
-                    stream.on('readable', () => {
-                        const output = stream.read()
-                        if (typeof output == 'string') throw `cannot get string from source stream`
-                        resolve(output)
-                    })
-                })
-            }
-        }
-        const {done, value} = await this.reader.read()
-        if (done) this.end = true
-
-        return value
+    #enableReply() {
+        this.worker.reply('read', async () => {
+            const chunk = await this.read()
+            return {inputs: chunk ? [chunk] : []}
+        }, this.#id)
+        
+        this.worker.reply('seek', () => {
+            throw `Stream input cannot be seeked.`
+        }, this.#id)
     }
-    
-    /* worker has already had data */
-    async dataReady() {
-        if (this.#dataReady) return
-        return new Promise<void>((resolve) => {
-            this.#ondataReady = () => resolve()
-        })
+
+    get end() { return this.stream.end }
+
+    async probe() {
+        const data = await this.stream.read()
+        data && this.cacheData.push(data)
+        return data
+    }
+
+    async read() {
+        if (this.cacheData.length > 0)
+            return this.cacheData.shift()
+        return await this.stream.read()
+    }
+
+    cache(source: SourceNode) { 
+        this.worker.close()
+        source2Reader.set(source, this) 
+    }
+}
+
+type Reader = FileReader | StreamReader
+
+/**
+ * cache Reader of a SourceNode, when source created, to may be used for exporting.
+ **/
+const source2Reader = new WeakMap<SourceNode, Reader>()
+
+
+/**
+ * Generic data type for all data buffer with unified API.
+ */
+export class Chunk {
+    #data: ChunkData
+    #offset = 0
+    constructor(data: ChunkData | WriteChunkData) {
+        if ('offset' in data) {
+            this.#data = data.data
+            this.#offset = data.offset
+        }
+        else
+            this.#data = data
+    }
+
+    get data() {
+        return ('buffer' in this.#data) ? this.#data : undefined
+    }
+
+    get videoFrame() {
+        return (this.#data instanceof VideoFrame) ? this.#data : undefined
+    }
+
+    get audioData() {
+        return (this.#data instanceof AudioData) ? this.#data : undefined
+    }
+
+    get offset() {
+        return this.#offset
     }
 }
 
@@ -204,39 +254,47 @@ export class Reader {
 /**
  * stream output handler
  */
+export async function newExporter(node: TargetNode, worker: FFWorker) {
+    const [graphConfig, node2id] = buildGraphConfig(node)
+    const readers = []
+    // create readers from sources
+    for (const [node, id] of node2id) {
+        if (node.type != 'source') continue
+        const reader = source2Reader.get(node)
+        if (!reader) throw `Cannot find reader from source2Reader WeakMap`
+        // const {reader} = await createReader(id, node.source, this.worker)
+        readers.push(reader)
+    }
+    const wasm = await loadWASM()
+    await worker.send('buildGraph', { graphConfig, wasm }) 
+    
+    return new Exporter(worker, readers)
+}
+
 export class Exporter {
     worker: FFWorker
-    readers: Reader[] = []
-    targetNode: TargetNode
+    readers: Reader[] // readers should be exists when exporting
     
-    constructor(node: TargetNode, worker: FFWorker) {
-        this.targetNode = node
+    constructor(worker: FFWorker, readers: Reader[]) {
         this.worker = worker
-    }
-
-    async build() { 
-        const [graphConfig, node2id] = buildGraphConfig(this.targetNode)
-        // create readers from sources
-        for (const [node, id] of node2id) {
-            if (node.type != 'source') continue
-            const reader = new Reader(id, node.source, this.worker)
-            await reader.build()
-            this.readers.push(reader)
-        }
-        const wasm = await loadWASM()
-        await this.worker.send('buildGraph', { graphConfig, wasm }) 
+        this.readers = readers
     }
     
     /* end when return undefined  */
-    async next(): Promise<{output?: WriteDataBuffer[], progress: number, done: boolean}> {
-        // make sure input reply ready
-        await Promise.all(this.readers.map(r => r.dataReady()))
+    async next() {
+        // // make sure input reply ready
+        // await Promise.all(this.readers.map(r => r.dataReady()))
         const {outputs, progress, endWriting} = await this.worker.send('nextFrame', undefined)
         // todo... temporarily only output one target
         if (Object.values(outputs).length !=  1) throw `Currently only one target at a time allowed`
         const output = Object.values(outputs)[0]
+        const holder = (output??[]).map(d => new Chunk(d))
         
-        return {output: output, progress, done: endWriting}
+        return {
+            output: holder, 
+            progress, 
+            done: endWriting
+        }
     }
 
     async close() {

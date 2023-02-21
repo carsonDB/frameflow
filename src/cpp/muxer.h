@@ -34,7 +34,6 @@ class Muxer {
     AVFormatContext* format_ctx;
     AVIOContext* io_ctx;
     std::vector<Stream*> streams;
-    std::vector<AVRational> from_time_bases;
     int buf_size = 32*1024;
     val writer;
 
@@ -62,7 +61,11 @@ public:
 
         streams.push_back(new Stream(format_ctx, encoder));
         streams.back()->av_stream_ptr()->time_base = time_base;
-        from_time_bases.push_back(encoder->av_codecContext_ptr()->time_base);     
+    }
+
+    // for not FF.encoder (e.g. WebCodecs encoder)
+    void newStream(StreamInfo streamInfo) {
+        streams.push_back(new Stream(format_ctx, streamInfo));
     }
 
     void writeHeader() {

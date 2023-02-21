@@ -5,8 +5,10 @@
 
 import { SourceType } from "../streamIO"
 
-export type DataBuffer = Uint8Array | Buffer
-export interface WriteDataBuffer { data: DataBuffer, offset: number }
+export type BufferData = Uint8Array | Buffer
+export type ChunkData = BufferData | VideoFrame | AudioData
+export interface WriteChunkData { data: ChunkData, offset: number }
+
 
 interface Rational {num: number, den: number}
 /**

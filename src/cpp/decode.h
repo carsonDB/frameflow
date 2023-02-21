@@ -17,12 +17,10 @@ using namespace std;
 class Decoder {
     AVCodecContext* codec_ctx;
     std::string _name;
-    AVRational from_time_base = {0, 1}; // rescale before decode
-    AVRational to_time_base = {0, 1}; // rescale after decode
 
 public:
     Decoder(Demuxer* demuxer, int stream_index, std::string name);
-    Decoder(string codec_name, std::string name);
+    Decoder(StreamInfo info, std::string name);
     ~Decoder() { avcodec_free_context(&codec_ctx); };
     std::string name() const { return _name; }
     AVRational timeBase() const { return codec_ctx->time_base; }

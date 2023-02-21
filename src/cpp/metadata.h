@@ -42,6 +42,7 @@ struct StreamInfo {
 
 
 StreamInfo createStreamInfo(AVFormatContext* p, AVStream* s);
+void set_avstream_from_streamInfo(AVStream* stream, StreamInfo info);
 void set_avcodec_context_from_streamInfo(StreamInfo& info, AVCodecContext* ctx);
 
 

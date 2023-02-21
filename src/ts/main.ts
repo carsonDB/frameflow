@@ -7,9 +7,10 @@ import { v4 as uuid } from 'uuid'
 import { applyMulitpleFilter, applySingleFilter, Filter, FilterArgs } from "./filters"
 import { loadWASM as _loadWASM } from './loader'
 import { FFWorker } from "./message"
-import { Exporter, Reader } from "./streamIO"
-import { DataBuffer, FormatMetadata, SourceNode, SourceType, StreamMetadata, StreamRef, TargetNode, WriteDataBuffer } from "./types/graph"
+import { Chunk, Exporter, FileReader, getSourceInfo, newExporter, sourceToStreamCreator, StreamReader } from "./streamIO"
+import { BufferData, SourceNode, SourceType, StreamMetadata, StreamRef, TargetNode } from "./types/graph"
 import { isNode } from './utils'
+import { webFrameToStreamMetadata } from './metadata'
 // @ts-ignore
 import Worker from 'worker-loader?inline=no-fallback!./transcoder.worker.ts'
 
@@ -19,30 +20,48 @@ import Worker from 'worker-loader?inline=no-fallback!./transcoder.worker.ts'
 /* use worker inline way to avoid bundle issue as dependency for further bundle. */
 const createWorker = () => new Worker()
 
+
+interface SourceArgs {
+    frameRate?: number
+}
 /**
  * create `SourceTrackGroup` from various sources.
  * @param src 
  * @param options 
  * @returns 
  */
-async function createSource(src: SourceType, options?: {}) {
+async function createSource(src: SourceType, args?: SourceArgs) {
     const id = uuid() // temporarily node id for getMetadata
-    // start a worker to probe data
+    const {size, url} = await getSourceInfo(src)
     const worker = new FFWorker(createWorker())
-    // convert all src to stream
-    const reader = new Reader(id, src, worker)
-    await reader.build()
-    const wasm = await loadWASM()
-    const metadata = await worker.send('getMetadata', {id, fullSize: reader.fullSize, url: reader.url, wasm})
-    const srcTracks = new SourceTrackGroup(src, metadata.streams, metadata.container, reader.fullSize)
-    // ready to end
-    /* hacky way to avoid slowing down wasm loading in next worker starter.
-     * Several experiments show that if create worker and load wasm immediately after worker.close(),
-     * it will become 10x slower, guess it is because of GC issue.
-     */
-    setTimeout(() => worker.close(), 5000)
+    // check if file or stream
+    if (size > 0) {
+        // start a worker to probe data
+        const reader = new FileReader(id, src, worker)
+        // convert all src to stream
+        const wasm = await loadWASM()
+        const {streams, container} = await worker.send('getMetadata', {id, fullSize: size, url: url??'', wasm})
+        const srcTracks = new SourceTrackGroup(src, streams, {type: 'file', container, fileSize: size})
+        // ready to end
+        reader.cache(srcTracks.node)
+        return srcTracks
+    }
+    else {
+        const stream = await sourceToStreamCreator(src)(0)
+        const reader = new StreamReader(id, stream, worker)
+        const firstChunk = await reader.probe()
+        // get metadata directly from image/samples
+        if (firstChunk instanceof VideoFrame || firstChunk instanceof AudioData) {
+            const streamMetadata = webFrameToStreamMetadata(firstChunk, args??{})
+            const srcTracks = new SourceTrackGroup(src, [streamMetadata], {type: 'stream', elementType: 'image'})
+            reader.cache(srcTracks.node)
+            return srcTracks
+        }
+        else
+            throw `Only stream imgae/samples are allowed`
+    }
 
-    return srcTracks
+
 }
 
 
@@ -85,29 +104,29 @@ class TrackGroup {
     async export(args?: ExportArgs) {
         const worker = new FFWorker(createWorker())
         const node = await createTargetNode(this.streams, args ?? {}, worker)
-        const target = new Target(node, worker, args ?? {})
-        await target.build()
+        const target = await newTarget(node, worker, args ?? {})
         return target
     }
     /**
      * @param filename target filename (currently only in Node.js)
      */
     exportTo(dest: string): Promise<void>
-    exportTo(dest: typeof ArrayBuffer): Promise<DataBuffer>
+    exportTo(dest: typeof ArrayBuffer): Promise<BufferData>
     exportTo(dest: typeof Blob): Promise<Blob>
     exportTo(dest: HTMLVideoElement): Promise<void>
     async exportTo(
         dest: string | typeof ArrayBuffer | typeof Blob | HTMLVideoElement, 
         args?: ExportArgs
-    ): Promise<void | DataBuffer | Blob> {
+    ): Promise<void | BufferData | Blob> {
         if (dest instanceof HTMLVideoElement) throw `not implemented yet`
         else if (dest == ArrayBuffer || dest == Blob) {
             const target = await this.export(args)
-            const chunks = []
+            const chunks: {data: BufferData, offset: number}[] = []
             let length = 0
             for await (const chunk of target) {
+                if (!chunk.data) continue
                 length = Math.max(length, chunk.offset + chunk.data.byteLength)
-                chunks.push(chunk)
+                chunks.push({data: chunk.data, offset: chunk.offset})
             }
             const videoData = new Uint8Array(length)
             chunks.forEach(c => videoData.set(c.data, c.offset))
@@ -121,6 +140,7 @@ class TrackGroup {
             const { createWriteStream } = require('fs')
             const writer = createWriteStream(url) as NodeJS.WriteStream
             for await (const {data, offset} of target) {
+                if (!data) continue
                 writer.write(data, ) // todo...
             }
             writer.end()
@@ -141,9 +161,8 @@ class Track extends TrackGroup {
 
 class SourceTrackGroup extends TrackGroup {
     node: SourceNode
-    constructor(source: SourceType, streams: StreamMetadata[], format: FormatMetadata, fileSize: number) {
-        const node: SourceNode = { type:'source', outStreams: streams, source,
-            format: { type: 'file', container: format, fileSize} }
+    constructor(source: SourceType, streams: StreamMetadata[], formatInfo: SourceNode['format']) {
+        const node: SourceNode = { type:'source', outStreams: streams, source, format: formatInfo }
         super(streams.map((s, i) => ({from: node, index: i}) ))
         this.node = node
     }
@@ -203,22 +222,23 @@ class Progress {
 
 }
 
+async function newTarget(node: TargetNode, worker: FFWorker, args: ExportArgs) {
+    const exporter = await newExporter(node, worker)
+    return new Target(node, exporter, args)
+}
+
 class Target {
     #node: TargetNode
     #exporter: Exporter
-    #outputs: WriteDataBuffer[] = []
+    #outputs: Chunk[] = []
     #end = false
     #args: ExportArgs
     #progress: Progress
-    constructor(node: TargetNode, worker: FFWorker, args: ExportArgs) {
+    constructor(node: TargetNode, exporter: Exporter, args: ExportArgs) {
         this.#node = node
-        this.#exporter = new Exporter(node, worker)
+        this.#exporter = exporter
         this.#args = args
         this.#progress = new Progress(this.#args.progress)
-    }
-    
-    async build() {
-        await this.#exporter.build()
     }
 
     get end() {
@@ -230,12 +250,12 @@ class Target {
     }
 
     /**
-     * @returns Each next iteration, return one chunk (WriteDataBuffer).
+     * @returns Each next iteration, return one chunk (Chunk ).
      *  Only when done==true then return undefined
      */
-    async next(): Promise<WriteDataBuffer | undefined> {
+    async next(): Promise<Chunk | undefined> {
         // direct return if previous having previous outputs
-        if (this.#outputs.length > 0) return this.#outputs.shift() as WriteDataBuffer
+        if (this.#outputs.length > 0) return this.#outputs.shift() as Chunk
         if (this.#end) return
         const {output, done, progress} = await this.#exporter.next()
         this.#progress.setProgress(progress)
@@ -256,13 +276,13 @@ class Target {
     [Symbol.asyncIterator]() {
         const target = this
         return {
-            async next(): Promise<{value: WriteDataBuffer, done: boolean}> {
+            async next(): Promise<{value: Chunk, done: boolean}> {
                 const output = await target.next()
-                return {value: output ?? {data: new Uint8Array(), offset: 0}, done: !output}
+                return {value: output ?? new Chunk(new Uint8Array()), done: !output}
             },
-            async return(): Promise<{value: WriteDataBuffer, done: boolean}> { 
+            async return(): Promise<{value: Chunk, done: boolean}> { 
                 await target.close() 
-                return { value: {data: new Uint8Array(), offset: 0}, done: true }
+                return { value: new Chunk(new Uint8Array()), done: true }
             }
         }
     }
@@ -280,7 +300,7 @@ interface MediaStreamArgs {
 interface ExportArgs {
     /* Target args */
     url?: string // export filename
-    format?: string // specified video/audio/image container format
+    format?: string // specified video/audio/image/rawvideo container format
     audio?: MediaStreamArgs, // audio track configurations in video container
     video?: MediaStreamArgs // video track configurations in video container
     /* Export args */

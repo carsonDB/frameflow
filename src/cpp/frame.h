@@ -9,38 +9,49 @@ extern "C" {
     #include <libavutil/imgutils.h>
     #include <libavutil/timestamp.h>
     #include <libavutil/audio_fifo.h>
+    #include <libavutil/channel_layout.h>
 }
 
 #include "utils.h"
 using namespace emscripten;
 
 
+struct FrameInfo {
+    std::string format;
+    int height;
+    int width;
+    int sample_rate;
+    int channels;
+    std::string channel_layout;
+    int nb_samples;
+};
+
 class Frame {
-    AVFrame* av_frame;
+    AVFrame* av_frame = NULL;
     int align = 32;
     std::string _name; // streamId
 public:
-    Frame() {
-        av_frame = av_frame_alloc(); 
-    }
-    Frame(std::string name) { 
+    Frame() {} // todo... remove
+    Frame(std::string name) {
         this->_name = name;
         av_frame = av_frame_alloc(); 
     }
+    Frame(FrameInfo info, double pts, std::string name);
     ~Frame() { av_frame_free(&av_frame); }
 
+    FrameInfo getFrameInfo();
     bool key() const { return av_frame->key_frame; }
     double doublePTS() const { return av_frame->pts; }
-    std::string name() const { return _name; }
+    std::string name() const { return this->_name; }
     int64_t pts() const { return av_frame->pts; }
     void set_pts(int64_t pts) { av_frame->pts = pts; }
 
-    void video_reinit(AVPixelFormat pix_fmt, int height, int width);
     void audio_reinit(AVSampleFormat sample_fmt, int sample_rate, uint64_t channel_layout, int nb_samples);
     
     std::vector<emscripten::val> getPlanes() {
-        auto isVideo = av_frame->height > 0 && av_frame->width > 0 ? true : false;
         std::vector<emscripten::val> data;
+        auto isVideo = av_frame->height > 0 && av_frame->width > 0;
+        
         if (isVideo) {
             size_t sizes[4] = {0};
             // video frame only has max 4 planes

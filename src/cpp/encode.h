@@ -22,7 +22,6 @@ class Encoder {
      */
     AVCodecContext* codec_ctx;
     AudioFrameFIFO* fifo = NULL;
-    AVRational from_time_base;
 
 public:
     Encoder(StreamInfo info);

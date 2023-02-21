@@ -1,19 +1,56 @@
 #include "frame.h"
 
 
-void Frame::video_reinit(AVPixelFormat pix_fmt, int height, int width) {
-    av_frame_unref(av_frame);
-    av_frame->format = pix_fmt;
-    av_frame->height = height;
-    av_frame->width = width;
-    
-    auto ret = av_frame_get_buffer(av_frame, 0);
-    CHECK(ret >= 0, "Could not allocate output frame samples (error '%s')");
+ 
+Frame::Frame(FrameInfo info, double pts, std::string name) {
+    this->_name = name; 
+    av_frame = av_frame_alloc();
+    auto isVideo = info.height > 0 && info.width > 0;
+    if (isVideo) {
+        av_frame->format = av_get_pix_fmt(info.format.c_str());
+        av_frame->height = info.height;
+        av_frame->width = info.width;
+        auto ret = av_frame_get_buffer(av_frame, 0);
+        CHECK(ret >= 0, "Could not allocate output frame samples (error '%s')");
+    }
+    else {
+        // if channel_layout given, infer default channel_layout given channels.
+        auto channel_layout = info.channel_layout != "" ?
+            av_get_channel_layout(info.channel_layout.c_str()) :
+            av_get_default_channel_layout(info.channels);
+
+        this->audio_reinit(
+            av_get_sample_fmt(info.format.c_str()), 
+            info.sample_rate,
+            channel_layout,
+            info.nb_samples
+        );
+    }
+    av_frame->pts = (int64_t)pts;
+}
+
+
+FrameInfo Frame::getFrameInfo() {
+    auto isVideo = av_frame->height > 0 && av_frame->width > 0;
+    auto format = isVideo ? 
+        av_get_pix_fmt_name((AVPixelFormat)av_frame->format) : 
+        av_get_sample_fmt_name((AVSampleFormat)av_frame->format);
+
+    return {
+        .format = format,
+        .height = av_frame->height,
+        .width = av_frame->width,
+        .channels = av_frame->channels,
+        .channel_layout = "", // no use
+        .nb_samples = av_frame->nb_samples,
+        .sample_rate = av_frame->sample_rate
+    };
 }
 
 void Frame::audio_reinit(AVSampleFormat sample_fmt, int sample_rate, uint64_t channel_layout, int nb_samples) {
     av_frame_unref(av_frame);
     av_frame->channel_layout = channel_layout;
+    
     av_frame->format         = sample_fmt;
     av_frame->sample_rate    = sample_rate;
     av_frame->nb_samples = nb_samples;

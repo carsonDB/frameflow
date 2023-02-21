@@ -31,6 +31,12 @@ public:
         av_stream->time_base = av_encoder->time_base;
         // av_stream->id = format_ctx->nb_streams - 1;
     }
+
+    Stream(AVFormatContext* format_ctx, StreamInfo& streamInfo) {
+        av_stream = avformat_new_stream(format_ctx, NULL);
+        set_avstream_from_streamInfo(av_stream, streamInfo);
+    }
+
     ~Stream() { av_free(av_stream); }
 
     AVStream* av_stream_ptr() { return av_stream; }

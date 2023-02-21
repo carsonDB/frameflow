@@ -5,7 +5,6 @@ Encoder::Encoder(StreamInfo info) {
     /* codec_ctx.time_base should smaller than 1/sample_rate (maybe change when open...??)
      * Because we need high resolution if using audio fifo to encode smaller sample size frame.
      */ 
-    this->from_time_base = info.time_base;
     if (info.codec_type == "audio") {
         AVRational max_time_base = {1, info.sample_rate};
         info.time_base = av_cmp_q(max_time_base, info.time_base) < 0 ? max_time_base : info.time_base;
@@ -56,8 +55,9 @@ vector<Packet*> Encoder::encodeFrame(Frame* frame) {
  */
 vector<Packet*> Encoder::encode(Frame* frame) {
     // rescale pts
-    frame->set_pts(av_rescale_q(frame->pts(), this->from_time_base, codec_ctx->time_base));
+    frame->set_pts(av_rescale_q(frame->pts(), AV_TIME_BASE_Q, codec_ctx->time_base));
 
+    vector<Packet*> outVec;
     /* Make sure that there is one frame worth of samples in the FIFO
      * buffer so that the encoder can do its work.
      * Since the decoder's and the encoder's frame size may differ, we
@@ -66,18 +66,23 @@ vector<Packet*> Encoder::encode(Frame* frame) {
      * */
     // auto skipFIFO = codec_ctx->frame_size == frame->av_ptr()->nb_samples && fifo->size() == 0;
     if (codec_ctx->codec_type == AVMEDIA_TYPE_AUDIO) {
-        vector<Packet*> packets;
         if (frame != NULL)
             fifo->push(frame);
         /* Read as many samples from the FIFO buffer as required to fill the frame.*/
         while (fifo->size() >= codec_ctx->frame_size || (frame == NULL && fifo->size() > 0)) {
             auto out_frame = fifo->pop(codec_ctx, codec_ctx->frame_size);
-            auto pkt_vec = this->encodeFrame(frame != NULL ? out_frame : NULL);
-            packets.insert(std::end(packets), std::begin(pkt_vec), std::end(pkt_vec)); 
+            const auto& pkt_vec = this->encodeFrame(frame != NULL ? out_frame : NULL);
+            outVec.insert(std::end(outVec), std::begin(pkt_vec), std::end(pkt_vec)); 
         }
-        return packets;
     }
-    else
-        return this->encodeFrame(frame);
+    else {
+        const auto& pkt_vec = this->encodeFrame(frame);
+        outVec.insert(std::end(outVec), std::begin(pkt_vec), std::end(pkt_vec)); 
+    }
+    // rescale back to base time_base
+    for (auto p : outVec)
+        av_packet_rescale_ts(p->av_packet(), codec_ctx->time_base, AV_TIME_BASE_Q);
+
+    return outVec;
 }
 

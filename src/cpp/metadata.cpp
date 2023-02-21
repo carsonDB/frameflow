@@ -43,17 +43,39 @@ StreamInfo createStreamInfo(AVFormatContext* format_ctx, AVStream* s) {
     return info;
 }
 
-/**
- * @param num_list ended with 0
- * @return index of num_list
- */
-int find_nearest_number(int num, const int* num_list) {
-    int id = 0, diff = abs(num - num_list[0]);
-    for (int i = 1; num_list[i] != 0; i++) {
-        id = abs(num - num_list[i]) < diff ? i : id;
+void set_avstream_from_streamInfo(AVStream* s, StreamInfo& info) {
+    auto par = s->codecpar;
+    s->time_base = info.time_base;
+    par->bit_rate = info.bit_rate;
+    par->codec_id = avcodec_find_encoder_by_name(info.codec_name.c_str())->id;
+
+    if (info.codec_type == "video") {
+        par->codec_type = AVMEDIA_TYPE_VIDEO;
+        par->height = info.height;
+        par->width = info.width;
+        s->sample_aspect_ratio = info.sample_aspect_ratio;
+        par->format = av_get_pix_fmt(info.format.c_str());
     }
-    return id;
+    else if (info.codec_type == "audio") {
+        par->codec_type == AVMEDIA_TYPE_AUDIO;
+        par->sample_rate = info.sample_rate;
+        par->channels = info.channels;
+        par->format = av_get_sample_fmt(info.format.c_str());
+        par->channel_layout = av_get_channel_layout(info.channel_layout.c_str());
+    }
 }
+
+// /**
+//  * @param num_list ended with 0
+//  * @return index of num_list
+//  */
+// int find_nearest_number(int num, const int* num_list) {
+//     int id = 0, diff = abs(num - num_list[0]);
+//     for (int i = 1; num_list[i] != 0; i++) {
+//         id = abs(num - num_list[i]) < diff ? i : id;
+//     }
+//     return id;
+// }
 
 void set_avcodec_context_from_streamInfo(StreamInfo& info, AVCodecContext* ctx) {
     ctx->bit_rate = info.bit_rate;

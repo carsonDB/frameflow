@@ -68,13 +68,16 @@ void Demuxer::build(val _reader) {
 Packet* Demuxer::read() {
     auto pkt = new Packet();
     auto ret = av_read_frame(format_ctx, pkt->av_packet());
+
+    if (pkt->size() <= 0) return pkt;
     // update current stream pts (avoid end of file where pkt is empty with uninit values)
-    if (pkt->size() > 0) {
-        auto av_pkt = pkt->av_packet();
-        const auto& time_base = format_ctx->streams[pkt->stream_index()]->time_base;
-        auto next_pts = av_pkt->pts + av_pkt->duration;
-        // printf("next_pts %lld, pts %lld, duration %lld\n", next_pts, av_pkt->pts, av_pkt->duration);
-        currentStreamsPTS[pkt->stream_index()] = next_pts * (double)time_base.num / time_base.den;
-    }
+    auto av_pkt = pkt->av_packet();
+    // convert to microseconds
+    auto& time_base = format_ctx->streams[pkt->stream_index()]->time_base;
+    av_packet_rescale_ts(av_pkt, time_base, AV_TIME_BASE_Q);
+
+    auto next_pts = av_pkt->pts + av_pkt->duration;
+    currentStreamsPTS[pkt->stream_index()] = next_pts / (double)AV_TIME_BASE;
+
     return pkt;
 }

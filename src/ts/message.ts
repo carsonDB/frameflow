@@ -1,8 +1,7 @@
 // import { Worker } from 'worker_threads'
 
 import { InferredFormatInfo } from "./types/ffmpeg"
-import { DataBuffer, FormatMetadata, GraphConfig, StreamMetadata, WriteDataBuffer } from "./types/graph"
-
+import { ChunkData, FormatMetadata, GraphConfig, StreamMetadata, WriteChunkData } from "./types/graph"
 
 
 type MessageType = keyof Messages
@@ -21,7 +20,7 @@ interface Messages {
     }
     nextFrame: {
         send: undefined,
-        reply: { outputs: {[nodeId in string]?: WriteDataBuffer[]}, endWriting: boolean, progress: number}
+        reply: { outputs: {[nodeId in string]?: WriteChunkData[]}, endWriting: boolean, progress: number}
     }
     deleteGraph: {
         send: undefined
@@ -33,7 +32,7 @@ type BackMessageType = keyof BackMessages
 interface BackMessages {
     read: {
         send: undefined
-        reply: { inputs: DataBuffer[] }
+        reply: { inputs: ChunkData[] }
     }
     seek: {
         send: { pos: number }
@@ -44,15 +43,18 @@ interface BackMessages {
 type AllMessageType = keyof AllMessages
 type AllPostMessage = {type: AllMessageType, data: any, id: string}
 interface AllMessages extends Messages, BackMessages {}
-type AllReplyCallback<T extends MessageType | BackMessageType> = (t: AllMessages[T]['send'], transferArr: DataBuffer['buffer'][]) => 
-    AllMessages[T]['reply'] | Promise<AllMessages[T]['reply']>
+type AllReplyCallback<T extends MessageType | BackMessageType> = 
+    (t: AllMessages[T]['send'], transferArr: TransferArray) => 
+        AllMessages[T]['reply'] | Promise<AllMessages[T]['reply']>
+
+type TransferArray = (Transferable | VideoFrame | AudioData)[]
 
 
 function sendMessage<T extends AllMessageType>(
     sender: any, 
     sendMsg: T, 
     data: AllMessages[T]['send'],
-    transferArray?: ArrayBuffer[],
+    transferArray?: TransferArray,
     id=''
 ) {
     const promise = new Promise<AllMessages[T]['reply']>((resolve, reject) => {
@@ -84,7 +86,7 @@ function replyMessage<T extends AllMessageType>(
     replier.addEventListener('message', (e: MessageEvent<{type: T, data: AllMessages[T]['send'], id: string}>) => {
         const { type, data, id: sendId } = e.data
         if (msgType != type || id != sendId) return; // ignore different sendMsg / id
-        const transferArr: DataBuffer['buffer'][] = []
+        const transferArr: TransferArray = []
         const replyData = callback(data, transferArr)
         if (replyData instanceof Promise) {
             replyData.then(data => {
@@ -109,7 +111,7 @@ export class FFWorker {
         // todo... nodejs and browser workers
     }
     
-    send<T extends MessageType>(sendMsg: T, data: Messages[T]['send'], transferArray?: ArrayBuffer[], id?: string) {
+    send<T extends MessageType>(sendMsg: T, data: Messages[T]['send'], transferArray?: TransferArray, id?: string) {
         return sendMessage(this.worker, sendMsg, data, transferArray, id)
     }
 
@@ -117,7 +119,13 @@ export class FFWorker {
         return replyMessage(this.worker, msgType, callback, id)
     }
 
-    close() { this.worker.terminate() }
+    close() { 
+        /* hacky way to avoid slowing down wasm loading in next worker starter.
+        * Several experiments show that if create worker and load wasm immediately after worker.close(),
+        * it will become 10x slower, guess it is because of GC issue.
+        */
+        setTimeout(() => this.worker.terminate(), 5000)
+    }
 }
 
 
@@ -130,7 +138,7 @@ export class WorkerHandlers {
         return replyMessage(self, msgType, callback, id)
     }
 
-    send<T extends BackMessageType>(msgType: T, data: BackMessages[T]['send'], transferArray?: ArrayBuffer[], id?: string) {
+    send<T extends BackMessageType>(msgType: T, data: BackMessages[T]['send'], transferArray?: TransferArray, id?: string) {
         return sendMessage(self, msgType, data, transferArray, id)
     }
 }

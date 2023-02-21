@@ -65,7 +65,7 @@ EMSCRIPTEN_BINDINGS(demuxer) {
 EMSCRIPTEN_BINDINGS(decode) {
     class_<Decoder>("Decoder")
         .constructor<Demuxer*, int, std::string>(allow_raw_pointers())
-        .constructor<std::string, std::string>()
+        .constructor<StreamInfo, std::string>()
         .property("name", &Decoder::name)
         .property("timeBase", &Decoder::timeBase)
         .property("dataFormat", &Decoder::dataFormat)
@@ -89,8 +89,19 @@ EMSCRIPTEN_BINDINGS(packet) {
 }
 
 EMSCRIPTEN_BINDINGS(frame) {
+    value_object<FrameInfo>("FrameInfo")
+        .field("format", &FrameInfo::format)
+        .field("height", &FrameInfo::height)
+        .field("width", &FrameInfo::width)
+        .field("channels", &FrameInfo::channels)
+        .field("sampleRate", &FrameInfo::sample_rate)
+        .field("nbSamples", &FrameInfo::nb_samples)
+        .field("channelLayout", &FrameInfo::channel_layout)
+    ;
+
     class_<Frame>("Frame")
-        // .constructor<FrameParams>()
+        .constructor<FrameInfo, double, std::string>()
+        .function("getFrameInfo", &Frame::getFrameInfo)
         .property("key", &Frame::key)
         .property("pts", &Frame::doublePTS)
         .property("name", &Frame::name)

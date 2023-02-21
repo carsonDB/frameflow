@@ -9,6 +9,9 @@ extern "C" {
 }
 
 
+/**
+ * all int64_t should be converted double (otherwise will become int32)
+*/
 struct TimeInfo {
     double pts;
     double dts;

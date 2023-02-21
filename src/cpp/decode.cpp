@@ -11,21 +11,17 @@ Decoder::Decoder(Demuxer* demuxer, int stream_index, string name) {
     avcodec_parameters_to_context(codec_ctx, codecpar);
     codec_ctx->framerate = av_guess_frame_rate(demuxer->av_format_context(), stream, NULL);
     avcodec_open2(codec_ctx, codec, NULL);
-    // from stream time base
-    this->from_time_base = stream->time_base;
-    this->to_time_base = stream->time_base;
 }
 
-Decoder::Decoder(string params, string name) {
-    _name = name;
-    AVDictionary* dict;
-    av_dict_parse_string(&dict, params.c_str(), "=", ":", 0);
-    auto codec = avcodec_find_decoder_by_name(av_dict_get(dict, "codec_name", NULL, 0)->value);
+Decoder::Decoder(StreamInfo info, string name) {
+    this->_name = name;
+    // create codec
+    auto codec = avcodec_find_decoder_by_name(info.codec_name.c_str());
     CHECK(codec != NULL, "Could not find input codec");
     codec_ctx = avcodec_alloc_context3(codec);
-    avcodec_open2(codec_ctx, codec, &dict);
-    // todo... from_time_base, to_time_base
-    av_dict_free(&dict);
+    // set parameters
+    set_avcodec_context_from_streamInfo(info, codec_ctx);
+    avcodec_open2(codec_ctx, codec, NULL);
 }
 
 std::vector<Frame*> Decoder::decodePacket(Packet* pkt) {
@@ -52,14 +48,12 @@ std::vector<Frame*> Decoder::decodePacket(Packet* pkt) {
 
 
 std::vector<Frame*> Decoder::decode(Packet* pkt) {
-    CHECK(from_time_base.num > 0, "from_time_base must be set");
-    CHECK(to_time_base.num > 0, "to_time_base must be set");
     // rescale packet from demuxer stream to encoder
-    av_packet_rescale_ts(pkt->av_packet(), this->from_time_base, codec_ctx->time_base);
+    av_packet_rescale_ts(pkt->av_packet(), AV_TIME_BASE_Q, codec_ctx->time_base);
     auto frames = this->decodePacket(pkt);
     // rescale frame to request time_base
     for (const auto& f : frames)
-        f->set_pts(av_rescale_q(f->pts(), codec_ctx->time_base, this->to_time_base));
+        f->set_pts(av_rescale_q(f->pts(), codec_ctx->time_base, AV_TIME_BASE_Q));
 
     return frames;
 }
