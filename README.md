@@ -1,6 +1,6 @@
 # [FrameFlow](https://frameflow.netlify.app/)
 
-![https://discord.gg/H698RFd8we](https://img.shields.io/badge/Discord-Join-blue?logo=discord&logoColor=white)
+[![Join Discord group](https://img.shields.io/badge/Discord-Join-blue?logo=discord&logoColor=white)](https://discord.gg/H698RFd8we)
 
 An audio/video **stream** processing library for **JavaScript** world, based on WebAssembly and FFmpeg (libav*).
 It directly uses low-level C API from libav* folders in FFmepg, wrapped with C++ and compiled as WebAssembly module. In other words, reimplements the I/O and control logic, to really fit into JavaScript world.
