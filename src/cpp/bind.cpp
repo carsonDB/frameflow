@@ -76,6 +76,12 @@ EMSCRIPTEN_BINDINGS(decode) {
 }
 
 EMSCRIPTEN_BINDINGS(packet) {
+    value_object<TimeInfo>("TimeInfo")
+        .field("pts", &TimeInfo::pts)
+        .field("dts", &TimeInfo::dts)
+        .field("duration", &TimeInfo::duration)
+    ;
+
     class_<Packet>("Packet")
         .constructor<>()
         .constructor<int, int64_t>()
@@ -138,7 +144,8 @@ EMSCRIPTEN_BINDINGS(muxer) {
         .constructor<std::string, emscripten::val>()
         .class_function("inferFormatInfo", &Muxer::inferFormatInfo)
         .function("dump", &Muxer::dump)
-        .function("newStream", &Muxer::newStream, allow_raw_pointers())
+        .function("newStream", select_overload<void(Encoder*, AVRational)>(&Muxer::newStream), allow_raw_pointers())
+        .function("newStream", select_overload<void(StreamInfo)>(&Muxer::newStream), allow_raw_pointers())
         .function("writeHeader", &Muxer::writeHeader)
         .function("writeTrailer", &Muxer::writeTrailer)
         .function("writeFrame", &Muxer::writeFrame, allow_raw_pointers())

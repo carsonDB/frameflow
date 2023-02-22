@@ -40,10 +40,10 @@ FrameInfo Frame::getFrameInfo() {
         .format = format,
         .height = av_frame->height,
         .width = av_frame->width,
+        .sample_rate = av_frame->sample_rate,
         .channels = av_frame->channels,
         .channel_layout = "", // no use
-        .nb_samples = av_frame->nb_samples,
-        .sample_rate = av_frame->sample_rate
+        .nb_samples = av_frame->nb_samples
     };
 }
 

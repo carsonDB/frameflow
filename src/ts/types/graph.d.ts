@@ -64,12 +64,12 @@ export type StreamMetadata = AudioStreamMetadata | VideoStreamMetadata
  * user defined graph
  */
 type UserNode = SourceNode | FilterNode | TargetNode
-export type SourceType = ReadableStream<DataBuffer> | string | URL | RequestInfo | Blob | DataBuffer
+export type SourceType = ReadableStream<BufferData> | string | URL | RequestInfo | Blob | BufferData
 interface StreamRef { from: SourceNode | FilterNode, index: number }
 export interface SourceNode {
     type: 'source', outStreams: StreamMetadata[], source: SourceType, url?: string
     format: { type: 'file', container: FormatMetadata, fileSize: number } | 
-            { type: 'stream', elementType: 'image' | 'chunk' }
+            { type: 'stream', elementType: 'frame' | 'chunk' }
 }
 
 interface FilterNode {
@@ -79,7 +79,7 @@ interface FilterNode {
 
 interface TargetNode {
     type: 'target', inStreams: StreamRef[], outStreams: StreamMetadata[], 
-    format: { type: 'image' | 'video', container: FormatMetadata }
+    format: { type: 'frame' | 'video', container: FormatMetadata }
 }
 
 type StreamConfigRef = {from: string, index: number}

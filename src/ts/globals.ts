@@ -5,8 +5,7 @@
 
 import { isNode, isBrowser } from './utils'
 
-
-export const Worker = isNode ? require('node:worker_threads').Worker : window.Worker
+export const Worker = isNode ? require('worker_threads').Worker : window.Worker
 
 
 function readFromNodeStream(stream: NodeJS.ReadableStream) {

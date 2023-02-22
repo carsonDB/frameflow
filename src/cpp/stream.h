@@ -4,6 +4,7 @@
 // #include <cstdio>
 #include "encode.h"
 #include "utils.h"
+#include "metadata.h"
 using namespace std;
 
 
@@ -32,9 +33,10 @@ public:
         // av_stream->id = format_ctx->nb_streams - 1;
     }
 
-    Stream(AVFormatContext* format_ctx, StreamInfo& streamInfo) {
+    Stream(AVFormatContext* format_ctx, StreamInfo& info) {
         av_stream = avformat_new_stream(format_ctx, NULL);
-        set_avstream_from_streamInfo(av_stream, streamInfo);
+        set_avstream_from_streamInfo(av_stream, info);
+        // av_stream->codecpar->codec_tag = avcodec_pix_fmt_to_codec_tag((AVPixelFormat)av_stream->codecpar->format);
     }
 
     ~Stream() { av_free(av_stream); }

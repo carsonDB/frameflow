@@ -22,7 +22,8 @@ StreamInfo createStreamInfo(AVFormatContext* format_ctx, AVStream* s) {
     info.bit_rate = par->bit_rate;
     info.start_time = toSeconds(s->start_time, s->time_base);
     info.duration = toSeconds(s->duration, s->time_base);
-    info.codec_name = avcodec_find_decoder(par->codec_id)->name;
+    // info.codec_name = avcodec_find_decoder(par->codec_id)->name;
+    info.codec_name = avcodec_descriptor_get(par->codec_id)->name;
     if (par->codec_type == AVMEDIA_TYPE_VIDEO) {
         info.codec_type = "video";
         info.width = par->width;
@@ -47,7 +48,8 @@ void set_avstream_from_streamInfo(AVStream* s, StreamInfo& info) {
     auto par = s->codecpar;
     s->time_base = info.time_base;
     par->bit_rate = info.bit_rate;
-    par->codec_id = avcodec_find_encoder_by_name(info.codec_name.c_str())->id;
+    // par->codec_id = avcodec_find_encoder_by_name(info.codec_name.c_str())->id;
+    par->codec_id = avcodec_descriptor_get_by_name(info.codec_name.c_str())->id;
 
     if (info.codec_type == "video") {
         par->codec_type = AVMEDIA_TYPE_VIDEO;
@@ -57,7 +59,7 @@ void set_avstream_from_streamInfo(AVStream* s, StreamInfo& info) {
         par->format = av_get_pix_fmt(info.format.c_str());
     }
     else if (info.codec_type == "audio") {
-        par->codec_type == AVMEDIA_TYPE_AUDIO;
+        par->codec_type = AVMEDIA_TYPE_AUDIO;
         par->sample_rate = info.sample_rate;
         par->channels = info.channels;
         par->format = av_get_sample_fmt(info.format.c_str());

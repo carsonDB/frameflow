@@ -16,7 +16,8 @@ Decoder::Decoder(Demuxer* demuxer, int stream_index, string name) {
 Decoder::Decoder(StreamInfo info, string name) {
     this->_name = name;
     // create codec
-    auto codec = avcodec_find_decoder_by_name(info.codec_name.c_str());
+    auto codec = avcodec_find_decoder(avcodec_descriptor_get_by_name(info.codec_name.c_str())->id);
+    // auto codec = avcodec_find_decoder_by_name(info.codec_name.c_str());
     CHECK(codec != NULL, "Could not find input codec");
     codec_ctx = avcodec_alloc_context3(codec);
     // set parameters

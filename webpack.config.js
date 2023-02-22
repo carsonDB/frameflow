@@ -11,7 +11,7 @@ const basicConfig = {
             {
                 test: /\.worker\.js$/,
                 loader: "worker-loader",
-                options: { inline:"no-fallback" }
+                options: { inline: "no-fallback" }
             },
             { 
                 test: /\.wasm$/, 
@@ -23,7 +23,7 @@ const basicConfig = {
 
     resolve: {
         extensions: ['.ts', '.d.ts', '...'],
-        fallback: { events: false, fs: false, module: false, url: false, crypto: false, path: false }
+        fallback: { events: false, fs: false, module: false, url: false, crypto: false, path: false, worker_threads: false }
     },
 
     output: {
@@ -44,12 +44,11 @@ const devConfig = {
     mode: 'development',
     plugins: [
         new HtmlWebpackPlugin({ 
-            title: 'frameflow dev',
+            title: 'FrameFlow dev',
             template: 'examples/browser/index.html',
-        })
+        }),
     ],
     devServer: {
-        // static: path.join(__dirname, "dist"),
         static: path.join(__dirname, "examples"),
     },
     devtool: 'eval-cheap-module-source-map',

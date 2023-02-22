@@ -50,11 +50,11 @@ InferredFormatInfo Muxer::inferFormatInfo(string format_name, string filename) {
     auto audio_codec = avcodec_find_encoder(format->audio_codec);
     
     InferredStreamInfo videoInfo = {
-        .codec_name = video_codec->name,
+        .codec_name = avcodec_descriptor_get(video_codec->id)->name,
         .format = av_get_pix_fmt_name(*video_codec->pix_fmts),
     };
     InferredStreamInfo audioInfo = {
-        .codec_name = audio_codec->name,
+        .codec_name = avcodec_descriptor_get(audio_codec->id)->name,
         .format = av_get_sample_fmt_name(*audio_codec->sample_fmts)
     };
 

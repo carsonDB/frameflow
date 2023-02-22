@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>encode</title>
+    <script defer src="../frameflow.min.js"></script>
+</head>
+
+<body>
+    <script>
+        window.onload = () => window.fflow = frameflow
+
+    </script>
+
+    <h2>Decode</h2>
+    <canvas id="decode_canvas" ></canvas>
+    <button id="decode_button">Decode</button>
+    <script>
+        const canvas = document.getElementById('decode_canvas')
+        const ctx = canvas.getContext('2d')
+        document.getElementById('decode_button').onclick = async () => {
+            const video = await fflow.source('../assets/Bunny.mp4')
+            const target = await video.filter('video').export({format: 'rawvideo'})
+            // simple way (maybe not precise)
+            const id = setInterval(async () => {
+                if (target.end) 
+                    clearInterval(id)
+                const chunk = await target.next()
+                ctx.drawImage(chunk.videoFrame, 0, 0)
+            }, target.frameRate)
+        }
+
+    </script>
+
+</body>

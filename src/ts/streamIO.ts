@@ -2,7 +2,7 @@ import { SourceStream } from './globals'
 import { buildGraphConfig } from './graph'
 import { loadWASM } from './loader'
 import { FFWorker } from "./message"
-import { ChunkData, SourceNode, SourceType, TargetNode, WriteChunkData } from "./types/graph"
+import { BufferData, ChunkData, SourceNode, SourceType, TargetNode, WriteChunkData } from "./types/graph"
 import { isBrowser, isNode } from './utils'
 
 
@@ -54,7 +54,7 @@ export async function getSourceInfo(src: SourceType): Promise<{size: number, url
 }
 
 
-async function fetchSourceData(url: RequestInfo | URL, startPos: number): Promise<SourceStream<ChunkData>> {
+async function fetchSourceData(url: RequestInfo | URL, startPos: number): Promise<SourceStream<BufferData>> {
     const { body, headers } = await fetch(url, { headers: { range: `bytes=${startPos}-` } })
     if (!body) throw `cannot fetch source url: ${url}`
     return new SourceStream(body)
@@ -105,7 +105,6 @@ export class FileReader {
     source: SourceType
     streamCreator: SourceStreamCreator
     stream: SourceStream<ChunkData> | undefined = undefined
-    // fullSize: number = 0
     worker: FFWorker
     // #dataReady: boolean = false
     // #ondataReady = () => {} // callback when new data available
@@ -117,20 +116,13 @@ export class FileReader {
         this.source = source
         this.#enableReply()
     }
-
-    // async build() {
-    //     const {size, url} = await getSourceInfo(this.source)
-    //     this.#url = url ?? ""
-        // this.fullSize = size
-    //     await this.createStream(0)
-    // }
     
     #enableReply() {
         
         this.worker.reply('read', async () => {
             // create stream for the first time
-            const stream = this.stream ?? (await this.streamCreator(0))
-            const data = await stream.read()
+            this.stream = this.stream ?? (await this.streamCreator(0))
+            const data = await this.stream.read()
             // this.#dataReady = false
             // call after sended data
             // setTimeout(() => {
@@ -143,7 +135,7 @@ export class FileReader {
         }, this.#id)
 
         this.worker.reply('seek', async ({pos}) => { 
-            await this.streamCreator(pos)
+            this.stream = await this.streamCreator(pos)
         }, this.#id)
     }
 
@@ -159,22 +151,22 @@ export class FileReader {
     //     })
     // }
 
-    cache(source: SourceNode) { 
+    close() {
         this.worker.close()
-        source2Reader.set(source, this) 
     }
 }
 
 
 export class StreamReader {
-    cacheData: ChunkData[] = []
+    cacheData: ChunkData[]
     #id: string
     worker: FFWorker
     stream: SourceStream<ChunkData>
 
-    constructor(id: string, stream: SourceStream<ChunkData>, worker: FFWorker) {
+    constructor(id: string, cacheData: ChunkData[], stream: SourceStream<ChunkData>, worker: FFWorker) {
         this.#id = id
         this.worker = worker
+        this.cacheData = cacheData
         this.stream = stream
         this.#enableReply()
     }
@@ -204,9 +196,9 @@ export class StreamReader {
         return await this.stream.read()
     }
 
-    cache(source: SourceNode) { 
+    close(source: SourceNode) { 
         this.worker.close()
-        source2Reader.set(source, this) 
+        SourceCacheData.set(source, this.cacheData) 
     }
 }
 
@@ -215,7 +207,7 @@ type Reader = FileReader | StreamReader
 /**
  * cache Reader of a SourceNode, when source created, to may be used for exporting.
  **/
-const source2Reader = new WeakMap<SourceNode, Reader>()
+const SourceCacheData = new WeakMap<SourceNode, ChunkData[]>()
 
 
 /**
@@ -260,9 +252,9 @@ export async function newExporter(node: TargetNode, worker: FFWorker) {
     // create readers from sources
     for (const [node, id] of node2id) {
         if (node.type != 'source') continue
-        const reader = source2Reader.get(node)
-        if (!reader) throw `Cannot find reader from source2Reader WeakMap`
-        // const {reader} = await createReader(id, node.source, this.worker)
+        const reader = node.format.type == 'file' ? 
+            new FileReader(id, node.source, worker) :
+            new StreamReader(id, SourceCacheData.get(node) ?? [], node.source, worker)
         readers.push(reader)
     }
     const wasm = await loadWASM()

@@ -4,7 +4,7 @@
  * TODO...
  */
 import { getFFmpeg, vec2Array } from './transcoder.worker'
-import * as FF from './types/ffmpeg'
+import { ModuleType as FF, FrameInfo, StreamInfo, StdVector } from './types/ffmpeg'
 
 
 type WebPacket = EncodedVideoChunk | EncodedAudioChunk
@@ -76,14 +76,14 @@ const codecMap: {[k in string]?: string} = {
 }
 
 export class Packet {
-    FFPacket?: FF.Packet
+    FFPacket?: FF['Packet']
     WebPacket?: WebPacket
     dts = 0
     mediaType: 'video' | 'audio'
-    constructor(pkt: FF.Packet | WebPacket, dts: number, mediaType: 'video' | 'audio') {
+    constructor(pkt: FF['Packet'] | WebPacket, dts: number, mediaType: 'video' | 'audio') {
         this.dts = dts
         this.mediaType = mediaType
-        if (pkt instanceof FF.Packet)
+        if (pkt instanceof getFFmpeg().Packet)
             this.FFPacket = pkt
         else
             this.WebPacket = pkt
@@ -136,12 +136,12 @@ export class Packet {
 }
 
 export class Frame {
-    FFFrame?: FF.Frame
+    FFFrame?: FF['Frame']
     WebFrame?: WebFrame
     #name: string
-    constructor(frame: FF.Frame | WebFrame, name: string) {
+    constructor(frame: FF['Frame'] | WebFrame, name: string) {
         this.#name = name
-        if (frame instanceof FF.Frame) {
+        if (frame instanceof getFFmpeg().Frame) {
             this.FFFrame = frame
         }
         else
@@ -153,7 +153,7 @@ export class Frame {
     toFF() {
         if (!this.FFFrame && this.WebFrame && this.WebFrame.format) {
             // default values
-            const frameInfo: FF.FrameInfo = {
+            const frameInfo: FrameInfo = {
                 format: '', height: 0, width: 0, channelLayout: '', channels: 0, sampleRate: 0, nbSamples: 0}
 
             if (this.WebFrame instanceof VideoFrame) {
@@ -221,7 +221,7 @@ export class Frame {
 }
 
 
-const videoEncorderConfig = (streamInfo: FF.StreamInfo): VideoEncoderConfig => {
+const videoEncorderConfig = (streamInfo: StreamInfo): VideoEncoderConfig => {
     const config = {
         codec: codecMap[streamInfo.codecName] ?? '',
         height: streamInfo.height,
@@ -234,22 +234,22 @@ const videoEncorderConfig = (streamInfo: FF.StreamInfo): VideoEncoderConfig => {
     return config
 }
 
-const audioEncoderConfig = (streamInfo: FF.StreamInfo): AudioEncoderConfig => ({
+const audioEncoderConfig = (streamInfo: StreamInfo): AudioEncoderConfig => ({
     codec: codecMap[streamInfo.codecName] ?? '',
     numberOfChannels: streamInfo.channels,
     sampleRate: streamInfo.sampleRate,
 })
 
 export class Encoder {
-    encoder: FF.Encoder | WebEncoder
-    streamInfo: FF.StreamInfo
+    encoder: FF['Encoder'] | WebEncoder
+    streamInfo: StreamInfo
     outputs: WebPacket[] = []
     dts = 0
 
     /**
      * @param useWebCodecs check `Encoder.isWebCodecsSupported` before contructor if `true`
      */
-    constructor(streamInfo: FF.StreamInfo, useWebCodecs: boolean) {
+    constructor(streamInfo: StreamInfo, useWebCodecs: boolean) {
         this.streamInfo = streamInfo
 
         if (useWebCodecs) {
@@ -273,27 +273,37 @@ export class Encoder {
         }
     }
 
-    static async isWebCodecsSupported(streamInfo: FF.StreamInfo) {
-        if (!('VideoEncoder' in window)) return false
+    static async isWebCodecsSupported(streamInfo: StreamInfo) {
+        if (!('VideoEncoder' in self)) return false
 
         // todo... config override
         if (streamInfo.mediaType == 'video') {
-            const { supported, config } = await VideoEncoder.isConfigSupported(videoEncorderConfig(streamInfo))
-            return supported
+            try {
+                const { supported, config } = await VideoEncoder.isConfigSupported(videoEncorderConfig(streamInfo))
+                return supported
+            }
+            catch {
+                return false
+            }
         }
         else if (streamInfo.mediaType == 'audio') {
-            const { supported, config } = await AudioEncoder.isConfigSupported(audioEncoderConfig(streamInfo))
-            return supported
+            try {
+                const { supported, config } = await AudioEncoder.isConfigSupported(audioEncoderConfig(streamInfo))
+                return supported
+            }
+            catch {
+                return false
+            }
         }
 
         return false
     }
 
     get FFEncoder() {
-        return this.encoder instanceof FF.Encoder ? this.encoder : undefined
+        return this.encoder instanceof getFFmpeg().Encoder ? this.encoder : undefined
     }
 
-    #getPackets(pktVec?: FF.StdVector<FF.Packet>) { 
+    #getPackets(pktVec?: StdVector<FF['Packet']>) { 
         const pkts1 = pktVec ? vec2Array(pktVec) : []
         const pkts2 = this.outputs.splice(0, this.outputs.length)
         const mediaType = this.streamInfo.mediaType
@@ -309,7 +319,7 @@ export class Encoder {
         const mediaType = this.streamInfo.mediaType
         if (!mediaType) throw `Encoder: streamInfo.mediaType is undefined`
         // FFmpeg
-        if (this.encoder instanceof FF.Encoder) {
+        if (this.encoder instanceof getFFmpeg().Encoder) {
             return this.#getPackets(this.encoder.encode(frame.toFF()))
         }
         // WebCodecs
@@ -327,7 +337,7 @@ export class Encoder {
     }
 
     async flush() {
-        if (this.encoder instanceof FF.Encoder) {
+        if (this.encoder instanceof getFFmpeg().Encoder) {
             return this.#getPackets(this.encoder.flush())
         }
         else {
@@ -337,7 +347,7 @@ export class Encoder {
     }
 
     close() {
-        if (this.encoder instanceof FF.Encoder)
+        if (this.encoder instanceof getFFmpeg().Encoder)
             this.encoder.delete()
         else
             this.encoder.close()
@@ -345,13 +355,13 @@ export class Encoder {
 }
 
 
-const videoDecorderConfig = (streamInfo: FF.StreamInfo): VideoDecoderConfig => ({
+const videoDecorderConfig = (streamInfo: StreamInfo): VideoDecoderConfig => ({
     codec: codecMap[streamInfo.codecName]??'',  // todo...
     codedHeight: streamInfo.height,
     codedWidth: streamInfo.width,
 })
 
-const audioDecoderConfig = (streamInfo: FF.StreamInfo): AudioDecoderConfig => ({
+const audioDecoderConfig = (streamInfo: StreamInfo): AudioDecoderConfig => ({
     codec: codecMap[streamInfo.codecName]??'',  // todo...
     numberOfChannels: streamInfo.channels,
     sampleRate: streamInfo.sampleRate
@@ -359,14 +369,14 @@ const audioDecoderConfig = (streamInfo: FF.StreamInfo): AudioDecoderConfig => ({
 
 export class Decoder {
     #name: string
-    decoder: FF.Decoder | WebDecoder
+    decoder: FF['Decoder'] | WebDecoder
     outputs: WebFrame[] = []
-    streamInfo: FF.StreamInfo
+    streamInfo: StreamInfo
 
     /**
      * @param useWebCodecs check `Decoder.isWebCodecsSupported` before contructor if `true`
      */
-    constructor(demuxer: FF.Demuxer | null, name: string, streamInfo: FF.StreamInfo, useWebCodecs: boolean) {
+    constructor(demuxer: FF['Demuxer'] | null, name: string, streamInfo: StreamInfo, useWebCodecs: boolean) {
         this.streamInfo = streamInfo
         this.#name = name
 
@@ -395,16 +405,26 @@ export class Decoder {
         }
     }
 
-    static async isWebCodecsSupported(streamInfo: FF.StreamInfo) {
-        if (!('VideoEncoder' in window)) return false
+    static async isWebCodecsSupported(streamInfo: StreamInfo) {
+        if (!('VideoEncoder' in self)) return false
 
         if (streamInfo.mediaType == 'video') {
-            const { supported } = await VideoDecoder.isConfigSupported(videoDecorderConfig(streamInfo))
-            return supported
+            try {
+                const { supported } = await VideoDecoder.isConfigSupported(videoDecorderConfig(streamInfo))
+                return supported
+            } 
+            catch {
+                return false
+            }
         }
         else if (streamInfo.mediaType == 'audio') {
-            const { supported } = await AudioDecoder.isConfigSupported(audioDecoderConfig(streamInfo))
-            return supported
+            try {
+                const { supported } = await AudioDecoder.isConfigSupported(audioDecoderConfig(streamInfo))
+                return supported
+            }
+            catch {
+                return false
+            }
         }
 
         return false
@@ -417,14 +437,14 @@ export class Decoder {
     }
 
     /* get frames from inputs or this.outputs */
-    #getFrames(frameVec?: FF.StdVector<FF.Frame>) {
+    #getFrames(frameVec?: StdVector<FF['Frame']>) {
         const frames1 = frameVec ? vec2Array(frameVec) : []
         const frames2 = this.outputs.splice(0, this.outputs.length)
         return [...frames1, ...frames2].map(f => new Frame(f, this.#name))
     }
 
     decode(pkt: Packet) {
-        if (this.decoder instanceof FF.Decoder) {
+        if (this.decoder instanceof getFFmpeg().Decoder) {
             return this.#getFrames(this.decoder.decode(pkt.toFF()))
         }
         else {
@@ -434,7 +454,7 @@ export class Decoder {
     }
 
     async flush() {
-        if (this.decoder instanceof FF.Decoder) {
+        if (this.decoder instanceof getFFmpeg().Decoder) {
             return this.#getFrames(this.decoder.flush())
         }
         else {
@@ -444,7 +464,7 @@ export class Decoder {
     }
 
     close() {
-        if (this.decoder instanceof FF.Decoder)
+        if (this.decoder instanceof getFFmpeg().Decoder)
             this.decoder.delete()
         else
             this.decoder.close()

@@ -11,8 +11,8 @@ import { Chunk, Exporter, FileReader, getSourceInfo, newExporter, sourceToStream
 import { BufferData, SourceNode, SourceType, StreamMetadata, StreamRef, TargetNode } from "./types/graph"
 import { isNode } from './utils'
 import { webFrameToStreamMetadata } from './metadata'
-// @ts-ignore
 import Worker from 'worker-loader?inline=no-fallback!./transcoder.worker.ts'
+
 
 
 // Warning: webpack 5 only support pattern: new Worker(new URL('', import.meta.url))
@@ -42,19 +42,18 @@ async function createSource(src: SourceType, args?: SourceArgs) {
         const wasm = await loadWASM()
         const {streams, container} = await worker.send('getMetadata', {id, fullSize: size, url: url??'', wasm})
         const srcTracks = new SourceTrackGroup(src, streams, {type: 'file', container, fileSize: size})
-        // ready to end
-        reader.cache(srcTracks.node)
+        reader.close()
         return srcTracks
     }
     else {
         const stream = await sourceToStreamCreator(src)(0)
-        const reader = new StreamReader(id, stream, worker)
+        const reader = new StreamReader(id, [], stream, worker)
         const firstChunk = await reader.probe()
         // get metadata directly from image/samples
         if (firstChunk instanceof VideoFrame || firstChunk instanceof AudioData) {
             const streamMetadata = webFrameToStreamMetadata(firstChunk, args??{})
-            const srcTracks = new SourceTrackGroup(src, [streamMetadata], {type: 'stream', elementType: 'image'})
-            reader.cache(srcTracks.node)
+            const srcTracks = new SourceTrackGroup(src, [streamMetadata], {type: 'stream', elementType: 'frame'})
+            reader.close(srcTracks.node)
             return srcTracks
         }
         else
@@ -204,9 +203,8 @@ class Progress {
     progress = 0
     callback?: (pg: number) => void
     handler: ReturnType<typeof setInterval>
-    constructor(callback?: (pg: number) => void, ms=200, decimals=4) {
+    constructor(callback?: (pg: number) => void, ms=200) {
         this.callback = callback
-        const p = Math.pow(10, decimals)
         this.handler = setInterval(() => {
             this.callback?.(this.progress)
         }, ms)
@@ -300,20 +298,23 @@ interface MediaStreamArgs {
 interface ExportArgs {
     /* Target args */
     url?: string // export filename
-    format?: string // specified video/audio/image/rawvideo container format
+    format?: string // specified video/audio/image/rawvideo container format // todo...
     audio?: MediaStreamArgs, // audio track configurations in video container
     video?: MediaStreamArgs // video track configurations in video container
     /* Export args */
+    disableWebCodecs?: boolean,
     progress?: (pg: number) => void
 }
 
 async function createTargetNode(inStreams: StreamRef[], args: ExportArgs, worker: FFWorker): Promise<TargetNode> {
-    const wasm = await loadWASM()
     // infer container format from url
     if (!args.format && !args.url) throw `must provide format name or url`
     const {format, video, audio} = await worker.send('inferFormatInfo',
-        { format: args.format ?? '', url: args.url ?? '', wasm })
-
+        { format: args.format ?? '', url: args.url ?? '', wasm: await loadWASM() })
+    
+    const type = format.includes('rawvideo') ?
+        'frame' :
+        mime.getType(format)?.includes('image') ? 'frame' : 'video'
     // format metadata, take first stream as primary stream
     const keyStream = inStreams[0].from.outStreams[inStreams[0].index]
     const { duration, bitRate } = keyStream
@@ -327,8 +328,7 @@ async function createTargetNode(inStreams: StreamRef[], args: ExportArgs, worker
     })
 
     return {type: 'target', inStreams, outStreams,
-        format: { type: mime.getType(format)?.includes('image') ? 'image' : 'video', 
-            container: {formatName: format, duration, bitRate}}}
+        format: { type, container: {formatName: format, duration, bitRate}}}
 }
 
 

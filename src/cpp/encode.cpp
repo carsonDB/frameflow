@@ -10,7 +10,10 @@ Encoder::Encoder(StreamInfo info) {
         info.time_base = av_cmp_q(max_time_base, info.time_base) < 0 ? max_time_base : info.time_base;
     }
 
-    auto codec = avcodec_find_encoder_by_name(info.codec_name.c_str());
+    // use codec id to specified codec name (h264 -> libx264)
+    auto codec = avcodec_find_encoder(avcodec_descriptor_get_by_name(info.codec_name.c_str())->id);
+    // auto codec = avcodec_find_encoder_by_name(info.codec_name.c_str());
+    
     CHECK(codec, "Could not allocate video codec context");
     codec_ctx = avcodec_alloc_context3(codec);
     CHECK(codec_ctx, "Could not allocate video codec context");

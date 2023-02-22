@@ -1,7 +1,7 @@
 import createModule from '../wasm/ffmpeg_built.js'
-import { Decoder, Frame, Packet, Encoder } from './codecs.js'
+import { Decoder, Frame, Packet, Encoder } from './codecs'
 import { WorkerHandlers } from "./message"
-import { FFmpegModule, ModuleType, StdVector, StreamInfo } from './types/ffmpeg'
+import { FFmpegModule, ModuleType as FF, StdVector, StreamInfo } from './types/ffmpeg'
 import { BufferData, ChunkData, GraphConfig, SourceConfig, StreamConfigRef, StreamMetadata, TargetConfig, WriteChunkData } from "./types/graph"
 
 
@@ -37,21 +37,24 @@ function streamInfoToMetadata(s: StreamInfo): StreamMetadata {
  * execute runtime for a given graph config
  */
 type SourceRuntime = 
-    { type: 'file' | 'image', config: SourceConfig, reader: SourceReader }
+    { type: 'file' | 'frame', config: SourceConfig, reader: SourceReader }
 
 type TargetRuntime = 
-    { type: 'file' | 'image', config: TargetConfig, writer: TargetWriter }
+    { type: 'file' | 'frame', config: TargetConfig, writer: TargetWriter }
 
 interface GraphRuntime {
     sources: SourceRuntime[]
-    filterers?: ModuleType['Filterer']
+    filterers?: FF['Filterer']
     targets: TargetRuntime[]
-    ffmpeg: FFmpegModule
+    ffmpeg?: FFmpegModule
 }
-let graph: GraphRuntime | null = null
+const graph: GraphRuntime = {
+    sources: [],
+    targets: [],
+}
 
 export function getFFmpeg() {
-    if (!graph) throw `GraphRuntime hasn't built, cannot get FFmpegModule`
+    if (!graph.ffmpeg) throw `GraphRuntime hasn't built, cannot get FFmpegModule`
     return graph.ffmpeg
 }
 
@@ -71,7 +74,7 @@ async function loadModule(wasmBinary: ArrayBuffer) {
 
 const handler = new WorkerHandlers()
 
- handler.reply('getMetadata', async ({id, fullSize, url, wasm}) => {
+handler.reply('getMetadata', async ({id, fullSize, url, wasm}) => {
     const ffmpeg = await loadModule(wasm)
     const inputIO = new InputIO(id, url, fullSize)
     const demuxer = new ffmpeg.Demuxer()
@@ -90,7 +93,8 @@ handler.reply('inferFormatInfo', async ({format, url, wasm}) => {
 // three stages should send in order: buildGraph -> nextFrame -> deleteGraph
 handler.reply('buildGraph', async ({graphConfig, wasm}) => { 
     const ffmpeg = await loadModule(wasm)
-    graph = await buildGraph(graphConfig, ffmpeg) 
+    graph.ffmpeg = ffmpeg
+    await buildGraph(graphConfig, ffmpeg) 
 })
 
 handler.reply('nextFrame', async (_, transferArr) => {
@@ -178,22 +182,31 @@ class InputIO {
 
 class OutputIO {
     #offset = 0
-    buffers: WriteChunkData[] = []
+    #buffers: WriteChunkData[] = []
     
     get offset() { return this.#offset }
 
-    write(data: Uint8Array) {
-        this.buffers.push({data: data.slice(0), offset: this.#offset})
-        this.#offset += data.byteLength
+    write(data: ChunkData) {
+        if ('byteLength' in data) {
+            this.#buffers.push({data: data.slice(0), offset: this.#offset})
+            this.#offset += data.byteLength
+        }
+        else {
+            this.#buffers.push({data, offset: 0})
+        }
     }
 
     seek(pos: number) {
         this.#offset = pos
     }
+
+    pullOutputs() {
+        return this.#buffers.splice(0, this.#buffers.length)
+    }
 }
 
 
-async function buildGraph(graphConfig: GraphConfig, ffmpeg: FFmpegModule): Promise<GraphRuntime> {
+async function buildGraph(graphConfig: GraphConfig, ffmpeg: FFmpegModule) {
     const sources: GraphRuntime['sources'] = []
     const targets: GraphRuntime['targets'] = []
     const { filterConfig, nodes } = graphConfig
@@ -207,9 +220,9 @@ async function buildGraph(graphConfig: GraphConfig, ffmpeg: FFmpegModule): Promi
             sources.push({ type: 'file', reader, config: source })
         }
         else {
-            if (source.format.elementType == 'image') {
+            if (source.format.elementType == 'frame') {
                 const reader = await newFrameSourceReader(source)
-                sources.push({ type: 'image', config: source, reader })
+                sources.push({ type: 'frame', config: source, reader })
             }
             else {
                 throw `Stream: [${source.format.elementType}] not implemented yet`
@@ -228,13 +241,15 @@ async function buildGraph(graphConfig: GraphConfig, ffmpeg: FFmpegModule): Promi
             const writer = await newVideoTargetWriter(target)
             targets.push({ type: 'file', config: target, writer })
         }
-        else if (target.format.type == 'image') {
+        else if (target.format.type == 'frame') {
             const writer = await newFrameTargetWriter(target)
-            targets.push({ type: 'image', config: target, writer })
+            targets.push({ type: 'frame', config: target, writer })
         }
     }
 
-    return { sources, filterers, targets, ffmpeg }
+    graph.sources = sources
+    graph.filterers = filterers
+    graph.targets = targets
 }
 
 
@@ -242,7 +257,7 @@ async function buildGraph(graphConfig: GraphConfig, ffmpeg: FFmpegModule): Promi
  * A filter is represented by a string of the form: [in_link_1]...[in_link_N]filter_name=arguments[out_link_1]...[out_link_M]
  */
 type FilterGraph = NonNullable<GraphConfig['filterConfig']>
-function buildFiltersGraph(graphConfig: FilterGraph, nodes: GraphConfig['nodes'], module: FFmpegModule): ModuleType['Filterer'] {
+function buildFiltersGraph(graphConfig: FilterGraph, nodes: GraphConfig['nodes'], module: FFmpegModule): FF['Filterer'] {
     const {inputs, outputs, filters} = graphConfig
     const getStream = ({from, index}: StreamConfigRef) => {
         const node = nodes[from]
@@ -320,8 +335,8 @@ function buildFiltersGraph(graphConfig: FilterGraph, nodes: GraphConfig['nodes']
 
     // feed into filterer if exists
     if (graph.filterers && frames.length != 0) {
-        const frameVec = graph.ffmpeg.createFrameVector()
-        frames.forEach((frame) => frame && frameVec.push_back(frame))
+        const frameVec = getFFmpeg().createFrameVector()
+        frames.forEach((frame) => frame && frameVec.push_back(frame.toFF()))
         const outFrameVec = graph.filterers.filter(frameVec)
         vec2Array(outFrameVec).forEach(f => frames.push(new Frame(f, f.name)))
     }
@@ -374,12 +389,12 @@ async function newVideoSourceReader(node: SourceConfig) {
 
 class VideoSourceReader {
     node: SourceConfig
-    demuxer: ModuleType['Demuxer']
+    demuxer: FF['Demuxer']
     decoders: {[streamIndex in number]?: Decoder}
     #inputIO?: InputIO
     #endOfPacket = false
     
-    constructor(node: SourceConfig, demuxer: ModuleType['Demuxer'], decorders: VideoSourceReader['decoders']) {
+    constructor(node: SourceConfig, demuxer: FF['Demuxer'], decorders: VideoSourceReader['decoders']) {
         this.node = node
         this.demuxer = demuxer
         this.decoders = decorders
@@ -511,7 +526,7 @@ async function newVideoTargetWriter(node: TargetConfig) {
         if (encoder.FFEncoder)
             muxer.newStream(encoder.FFEncoder, timeBase) // todo... remove timeBase
         else
-            muxer.newStream(info)
+            muxer.newStream({...info, timeBase})
         targetStreamIndexes[id] = i
     }
 
@@ -522,13 +537,13 @@ class VideoTargetWriter {
     node: TargetConfig
     encoders: {[streamId: string]: Encoder}
     targetStreamIndexes: {[streamId: string]: number}
-    muxer: ModuleType['Muxer']
+    muxer: FF['Muxer']
     #outputIO: OutputIO
     firstWrite = false
     
     constructor(
         node: TargetConfig, 
-        muxer: ModuleType['Muxer'], 
+        muxer: FF['Muxer'], 
         encoders: VideoTargetWriter['encoders'],
         outputIO: OutputIO,
         targetStreamIndexes: VideoTargetWriter['targetStreamIndexes']
@@ -573,7 +588,7 @@ class VideoTargetWriter {
     }
 
     pullOutputs() {
-        return this.#outputIO.buffers.splice(0, this.#outputIO.buffers.length)
+        return this.#outputIO.pullOutputs()
     }
 
     close() {
@@ -584,6 +599,8 @@ class VideoTargetWriter {
 }
 
 async function newFrameTargetWriter(node: TargetConfig) {
+    if (node.outStreams.length != 1)
+        throw `FrameTargetWriter only allow one stream`
     const streamInfo = streamMetadataToInfo(node.outStreams[0])
     const useWebCodecs = await Encoder.isWebCodecsSupported(streamInfo)
     return new FrameTargetWriter(node, streamInfo, useWebCodecs)
@@ -592,30 +609,37 @@ async function newFrameTargetWriter(node: TargetConfig) {
 class FrameTargetWriter {
     node: TargetConfig
     encoder: Encoder
-    outputs: WriteChunkData[] = []
-    offset = 0
+    #outputIO: OutputIO
     
     constructor(node: TargetConfig, streamInfo: StreamInfo, useWebCodecs: boolean) {
         this.node = node
-        if (node.outStreams.length != 1 || node.outStreams[0].mediaType != 'video')
-            throw `image writer only allow one video stream`
         this.encoder = new Encoder(streamInfo, useWebCodecs)
+        this.#outputIO = new OutputIO()
     }
 
     #pktVec2outputs(pkts: Packet[]) {
         for (const pkt of pkts) {
             const data = pkt.toFF().getData()
-            this.outputs.push({data, offset: this.offset})
-            this.offset += data.byteLength
+            this.#outputIO.write(data)
         }
     }
 
     writeFrames(frames: Frame[]) {
         // use inStream ref
         const {from, index} = this.node.inStreams[0]
-        frames.filter(f => f.name == streamId(from, index)).forEach(f => {
-            const pktVec = this.encoder.encode(f)
-            this.#pktVec2outputs(pktVec)
+        const selfFrames = frames.filter(f => f.name == streamId(from, index))
+        const rawVideo = this.node.outStreams[0].codecName == ''
+        selfFrames.forEach(f => {
+            if (rawVideo) {
+                if (f.WebFrame)
+                    this.#outputIO.write(f.WebFrame)
+                else
+                    throw `Output rawvideo (bitmap) not implemented`
+            }
+            else {
+                const pktVec = this.encoder.encode(f)
+                this.#pktVec2outputs(pktVec)
+            }
         })
     }
     
@@ -626,7 +650,7 @@ class FrameTargetWriter {
     }
 
     pullOutputs() {
-        return this.outputs.splice(0, this.outputs.length)
+        return this.#outputIO.pullOutputs()
     }
 
     close() {

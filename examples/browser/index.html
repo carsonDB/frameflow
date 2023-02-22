@@ -21,12 +21,14 @@
 
     <p>Here are some examples, each starts with 👉.</p>
     <p>Please open console to see more information.</p>
+    <a href="browser/codec.html" >Encode</a>
 
     <h2>👉Fetch and get metadata</h2>
     <button id="metadata">Metadata</button>
     <script>
         document.getElementById('metadata').onclick = async () => {
-            const src = await fflow.source("./assets/flame.avi")
+            // const src = await fflow.source("./assets/flame.avi")
+            const src = await fflow.source("./assets/Bunny.mp4")
             console.log('Metadata:', src.metadata)
         }
     </script>
@@ -40,7 +42,7 @@
         document.getElementById('transcode').onclick = async () => {
             const onProgress = pg => document.getElementById('transcode-progress').textContent = `${(pg*100).toFixed(2)}%`
             const src = await fflow.source('./assets/flame.avi')
-            const blob = await src.filter('video').exportTo(Blob, {format: 'mp4', progress: onProgress}) 
+            const blob = await src.filter('video').exportTo(Blob, {format: 'mp4', progress: onProgress})
             document.getElementById('transcode-video').src = URL.createObjectURL(blob)
         }
     </script>
