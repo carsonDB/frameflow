@@ -28,6 +28,7 @@ interface CommonStreamMetadata {
     duration: number,
     bitRate: number,
     codecName: string,
+    extraData: Uint8Array
 }
 
 /**

@@ -119,7 +119,7 @@ export class Packet {
                 type: this.FFPacket.key ? 'key' : 'delta' as EncodedVideoChunkType, 
                 data: this.FFPacket.getData(), 
                 timestamp: timeInfo.pts, 
-                duration: timeInfo.duration
+                duration: timeInfo.duration,
             }
             this.WebPacket = this.mediaType == 'video' ? 
                 new EncodedVideoChunk(init) : new EncodedAudioChunk(init)
@@ -150,6 +150,10 @@ export class Frame {
 
     get name() { return this.#name }
 
+    get pts() {
+        return this.FFFrame?.pts ?? this.WebFrame?.timestamp ?? 0
+    }
+
     toFF() {
         if (!this.FFFrame && this.WebFrame && this.WebFrame.format) {
             // default values
@@ -176,7 +180,7 @@ export class Frame {
         return this.FFFrame
     }
 
-    toWeb() {
+    toWeb(streamInfo: StreamInfo) {
         if (!this.WebFrame && this.FFFrame) {
             // get planes data from AVFrame
             const planes = vec2Array(this.FFFrame.getPlanes())
@@ -189,7 +193,8 @@ export class Frame {
                     timestamp: this.FFFrame.pts,
                     codedHeight: frameInfo.height,
                     codedWidth: frameInfo.width,
-                    format: formatFF2Web('pixel', frameInfo.format)
+                    format: formatFF2Web('pixel', frameInfo.format),
+                    duration: 1 / streamInfo.frameRate * 1_000_000
                 }
                 planes.reduce((offset, d) => {
                     data.set(d, offset)
@@ -244,7 +249,7 @@ export class Encoder {
     encoder: FF['Encoder'] | WebEncoder
     streamInfo: StreamInfo
     outputs: WebPacket[] = []
-    dts = 0
+    #dts = 0
 
     /**
      * @param useWebCodecs check `Encoder.isWebCodecsSupported` before contructor if `true`
@@ -309,8 +314,8 @@ export class Encoder {
         const mediaType = this.streamInfo.mediaType
         if (!mediaType) throw `Encoder.#getPackets mediaType is undefined`
         return [...pkts1, ...pkts2].map(p => {
-            const pkt = new Packet(p, this.dts, mediaType)
-            this.dts += pkt.duration
+            const pkt = new Packet(p, this.#dts, mediaType)
+            this.#dts += pkt.duration
             return pkt
         })
     }
@@ -323,12 +328,12 @@ export class Encoder {
             return this.#getPackets(this.encoder.encode(frame.toFF()))
         }
         // WebCodecs
-        const webFrame = frame.toWeb()
+        const webFrame = frame.toWeb(this.streamInfo)
         if (this.encoder instanceof VideoEncoder && webFrame instanceof VideoFrame) {
-            this.encoder.encode(webFrame) // dts...
+            this.encoder.encode(webFrame)
         }
         else if (this.encoder instanceof AudioEncoder && webFrame instanceof AudioData) {
-            this.encoder.encode(webFrame) // dts...
+            this.encoder.encode(webFrame)
         }
         else
             throw `Encoder.encode frame failed`
@@ -356,15 +361,17 @@ export class Encoder {
 
 
 const videoDecorderConfig = (streamInfo: StreamInfo): VideoDecoderConfig => ({
-    codec: codecMap[streamInfo.codecName]??'',  // todo...
+    codec: codecMap[streamInfo.codecName]??'',
     codedHeight: streamInfo.height,
     codedWidth: streamInfo.width,
+    description: streamInfo.extraData
 })
 
 const audioDecoderConfig = (streamInfo: StreamInfo): AudioDecoderConfig => ({
-    codec: codecMap[streamInfo.codecName]??'',  // todo...
+    codec: codecMap[streamInfo.codecName]??'',
     numberOfChannels: streamInfo.channels,
-    sampleRate: streamInfo.sampleRate
+    sampleRate: streamInfo.sampleRate,
+    description: streamInfo.extraData
 })
 
 export class Decoder {

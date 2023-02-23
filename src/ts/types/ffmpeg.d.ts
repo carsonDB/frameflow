@@ -70,6 +70,7 @@ interface StreamInfo {
     codecName: string
     mediaType: 'video' | 'audio' | undefined
     format: string // pixelFormat if codecType is 'video'; sampleFormat if codecType is 'audio'
+    extraData: Uint8Array
     // video
     width: number
     height: number

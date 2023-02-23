@@ -23,6 +23,7 @@ EMSCRIPTEN_BINDINGS(metadata) {
         .field("mediaType", &StreamInfo::codec_type)
         .field("codecName", &StreamInfo::codec_name)
         .field("format", &StreamInfo::format)
+        .field("extraData", &StreamInfo::extraData)
         .field("width", &StreamInfo::width)
         .field("height", &StreamInfo::height)
         .field("frameRate", &StreamInfo::frame_rate)
@@ -83,8 +84,7 @@ EMSCRIPTEN_BINDINGS(packet) {
     ;
 
     class_<Packet>("Packet")
-        .constructor<>()
-        .constructor<int, int64_t>()
+        .constructor<int, TimeInfo>()
         .property("key", &Packet::key)
         .property("size", &Packet::size)
         .property("streamIndex", &Packet::stream_index)
@@ -111,7 +111,7 @@ EMSCRIPTEN_BINDINGS(frame) {
         .property("key", &Frame::key)
         .property("pts", &Frame::doublePTS)
         .property("name", &Frame::name)
-        .function("getData", &Frame::getPlanes)
+        .function("getPlanes", &Frame::getPlanes)
         .function("dump", &Frame::dump)
     ;
 }

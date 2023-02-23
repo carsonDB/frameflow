@@ -20,7 +20,7 @@ function streamMetadataToInfo(s: StreamMetadata): StreamInfo {
     const format = s.mediaType == 'audio' ? s.sampleFormat : s.pixelFormat
     const defaultParams = {width: 0, height: 0, frameRate: 0, sampleRate: 0, 
         channelLayout: '', channels: 0, sampleAspectRatio: {num: 0, den: 1} }
-    return {...defaultParams, ...s, format}
+    return {...defaultParams, ...s, format, extraData: s.extraData.slice(0)}
 }
 
 function streamInfoToMetadata(s: StreamInfo): StreamMetadata {
@@ -60,12 +60,10 @@ export function getFFmpeg() {
 
 // initiantate wasm module
 async function loadModule(wasmBinary: ArrayBuffer) {
-    // console.time('loadModule')
     const ffmpeg: FFmpegModule = await createModule({
         // Module callback functions: https://emscripten.org/docs/api_reference/module.html
         wasmBinary
     })
-    // console.timeEnd('loadModule')
     ffmpeg.setConsoleLogger(false)
 
     return ffmpeg
@@ -250,8 +248,6 @@ async function buildGraph(graphInstance: GraphInstance, ffmpeg: FFmpegModule) {
     graph.sources = sources
     graph.filterers = filterers
     graph.targets = targets
-
-    console.log(graph.sources[0], graph.targets[0])
 }
 
 
@@ -347,17 +343,20 @@ function buildFiltersGraph(graphInstance: FilterGraph, nodes: GraphInstance['nod
 
     // write to destinations
     const outputs: {[nodeId: string]: WriteChunkData[]} = {}
-    graph.targets.forEach(target => {
-        endWriting ? target.writer.writeEnd() : target.writer.writeFrames(frames)
+    for (const target of graph.targets) {
+        if (endWriting)
+            await target.writer.writeEnd()
+        else
+            target.writer.writeFrames(frames)
         outputs[target.instance.id] = target.writer.pullOutputs()
-    })
+    }
     
     // delete frames
     frames.forEach(f => f?.close())
 
     // current progress in [0, 1]
     const progress = graph.sources.reduce((pg, s) => Math.min(s.reader.progress, pg), 1)
-    
+
     return {outputs, progress, endWriting}
 }
 
@@ -569,13 +568,12 @@ class VideoTargetWriter {
         // write frames
         for (const f of frames) {
             const streamId = f.name
-            console.log({streamId}, this.encoders)
-            if (!this.encoders[streamId]) return
+            if (!this.encoders[streamId]) continue
             const pkts = this.encoders[streamId].encode(f)
-            pkts.forEach(pkt => {
+            for (const pkt of pkts) {
                 this.muxer.writeFrame(pkt.toFF(), this.targetStreamIndexes[streamId])
                 pkt.close()
-            })
+            }
         }
     }
 

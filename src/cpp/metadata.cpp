@@ -24,6 +24,8 @@ StreamInfo createStreamInfo(AVFormatContext* format_ctx, AVStream* s) {
     info.duration = toSeconds(s->duration, s->time_base);
     // info.codec_name = avcodec_find_decoder(par->codec_id)->name;
     info.codec_name = avcodec_descriptor_get(par->codec_id)->name;
+    info.extraData = emscripten::val(emscripten::typed_memory_view(par->extradata_size, par->extradata));
+
     if (par->codec_type == AVMEDIA_TYPE_VIDEO) {
         info.codec_type = "video";
         info.width = par->width;

@@ -1,6 +1,7 @@
 #ifndef METADATA_H
 #define METADATA_H
 
+#include <emscripten/val.h>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -28,6 +29,7 @@ struct StreamInfo {
     string codec_type;
     string codec_name;
     string format;
+    emscripten::val extraData;
     // video
     int width;
     int height;

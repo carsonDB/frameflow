@@ -51,7 +51,7 @@ public:
     std::vector<emscripten::val> getPlanes() {
         std::vector<emscripten::val> data;
         auto isVideo = av_frame->height > 0 && av_frame->width > 0;
-        
+
         if (isVideo) {
             size_t sizes[4] = {0};
             // video frame only has max 4 planes

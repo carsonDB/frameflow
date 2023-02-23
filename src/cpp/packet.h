@@ -23,10 +23,12 @@ class Packet {
     AVPacket* packet;
 public:
     Packet() { packet = av_packet_alloc(); }
-    Packet(int bufSize, int64_t pts) {
+    Packet(int bufSize, TimeInfo info) {
         packet = av_packet_alloc();
         av_new_packet(packet, bufSize);
-        packet->pts = pts;
+        packet->pts = info.pts;
+        packet->dts = info.dts;
+        packet->duration = info.duration;
     }
     
     ~Packet() { av_packet_free(&packet); };

@@ -285,9 +285,10 @@ class Target {
         }
     }
 
-    close() {
+    async close() {
         this.#progress.close()
-        return this.#exporter.close()
+        await this.#exporter.close()
+        return
     }
 }
 
