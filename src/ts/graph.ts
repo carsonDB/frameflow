@@ -1,14 +1,14 @@
 import { v4 as uuid } from 'uuid'
 import { applySingleFilter } from './filters'
-import { GraphConfig, StreamRef, TargetNode, UserNode } from './types/graph'
+import { GraphInstance, StreamRef, TargetNode, UserNode } from './types/graph'
 
 /**
  * given endpoints, backtrace until sources.
  * - make up some filterNodes (e.g. resample)
  * - tree shake and optimize the graph (todo...)
- * - convert to graphConfig (easy for further work)
+ * - convert to graphInstance (easy for further work)
  */
-export function buildGraphConfig(target: TargetNode): [GraphConfig, Map<UserNode, string>] {
+export function buildGraphInstance(target: TargetNode): [GraphInstance, Map<UserNode, string>] {
     // make up graph
     target = completeGraph(target) // todo... remove data format conversion
 
@@ -22,11 +22,11 @@ export function buildGraphConfig(target: TargetNode): [GraphConfig, Map<UserNode
     })
     traversalGraph(target.inStreams)
 
-    // convert to graphConfig
+    // convert to graphInstance
     const sources: string[] = []
     const targets: string[] = []
-    const configNodes: GraphConfig['nodes'] = {}
-    const filterConfig: GraphConfig['filterConfig'] = {
+    const nodeInstances: GraphInstance['nodes'] = {}
+    const filterInstance: GraphInstance['filterInstance'] = {
         inputs: [],
         outputs: [],
         filters: [],
@@ -35,41 +35,41 @@ export function buildGraphConfig(target: TargetNode): [GraphConfig, Map<UserNode
         if (node.type == 'source') {
             sources.push(id)
             const {source: _, ...rest} = node
-            configNodes[id] = {...rest, id}
+            nodeInstances[id] = {...rest, id}
         }
         else if (node.type == 'filter') {
-            filterConfig.filters.push(id)
+            filterInstance.filters.push(id)
             const inStreams = node.inStreams.map(({from, index}) => {
-                const configRef = {from: node2id.get(from) ?? '', index}
+                const instanceRef = {from: node2id.get(from) ?? '', index}
                 if (from.type == 'source')
-                    filterConfig.inputs.push(configRef)
-                return configRef
+                    filterInstance.inputs.push(instanceRef)
+                return instanceRef
             })
-            configNodes[id] = {...node, inStreams, id}
+            nodeInstances[id] = {...node, inStreams, id}
         }
         else {
             targets.push(id)
             const inStreams = node.inStreams.map(({from, index}) => {
-                const configRef = {from: node2id.get(from) ?? '', index}
+                const instanceRef = {from: node2id.get(from) ?? '', index}
                 if (from.type == 'filter') 
-                    filterConfig.outputs.push(configRef)
-                return configRef
+                    filterInstance.outputs.push(instanceRef)
+                return instanceRef
             })
-            configNodes[id] = {...node, inStreams, id}
+            nodeInstances[id] = {...node, inStreams, id}
         }
 
     })
     // reverse filters
-    filterConfig.filters.reverse()
+    filterInstance.filters.reverse()
 
-    const graphConfig = {
-        nodes: configNodes,
+    const grapInstance = {
+        nodes: nodeInstances,
         sources, 
-        filterConfig: (filterConfig.filters.length > 0 ? filterConfig: undefined), 
+        filterInstance: (filterInstance.filters.length > 0 ? filterInstance: undefined), 
         targets
     }
     
-    return [graphConfig, node2id]
+    return [grapInstance, node2id]
 }
 
 

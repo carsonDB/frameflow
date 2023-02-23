@@ -1,7 +1,7 @@
 // import { Worker } from 'worker_threads'
 
 import { InferredFormatInfo } from "./types/ffmpeg"
-import { ChunkData, FormatMetadata, GraphConfig, StreamMetadata, WriteChunkData } from "./types/graph"
+import { ChunkData, FormatMetadata, GraphInstance, StreamMetadata, WriteChunkData } from "./types/graph"
 
 
 type MessageType = keyof Messages
@@ -15,7 +15,7 @@ interface Messages {
         reply: InferredFormatInfo
     }
     buildGraph: {
-        send: { graphConfig: GraphConfig, wasm: ArrayBuffer }
+        send: { graphInstance: GraphInstance, wasm: ArrayBuffer }
         reply: void
     }
     nextFrame: {

@@ -1,5 +1,5 @@
 import { SourceStream } from './globals'
-import { buildGraphConfig } from './graph'
+import { buildGraphInstance } from './graph'
 import { loadWASM } from './loader'
 import { FFWorker } from "./message"
 import { BufferData, ChunkData, SourceNode, SourceType, TargetNode, WriteChunkData } from "./types/graph"
@@ -247,7 +247,7 @@ export class Chunk {
  * stream output handler
  */
 export async function newExporter(node: TargetNode, worker: FFWorker) {
-    const [graphConfig, node2id] = buildGraphConfig(node)
+    const [graphInstance, node2id] = buildGraphInstance(node)
     const readers = []
     // create readers from sources
     for (const [node, id] of node2id) {
@@ -258,7 +258,7 @@ export async function newExporter(node: TargetNode, worker: FFWorker) {
         readers.push(reader)
     }
     const wasm = await loadWASM()
-    await worker.send('buildGraph', { graphConfig, wasm }) 
+    await worker.send('buildGraph', { graphInstance, wasm }) 
     
     return new Exporter(worker, readers)
 }

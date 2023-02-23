@@ -1,6 +1,6 @@
 /**
  * definition of graphs:
- *  UserGraph -> GraphConfig -> GraphRuntime
+ *  UserGraph -> GraphInstance -> GraphRuntime
  */
 
 import { SourceType } from "../streamIO"
@@ -82,20 +82,20 @@ interface TargetNode {
     format: { type: 'frame' | 'video', container: FormatMetadata }
 }
 
-type StreamConfigRef = {from: string, index: number}
-type SourceConfig = Omit<SourceNode, "source"> & {id: string}
-type FilterConfig = Omit<FilterNode, "inStreams"> & {inStreams: StreamConfigRef[], id: string}
-type TargetConfig = Omit<TargetNode, "inStreams"> & {inStreams: StreamConfigRef[], id: string}
+type StreamInstanceRef = {from: string, index: number}
+type SourceInstance = Omit<SourceNode, "source"> & {id: string}
+type FilterInstance = Omit<FilterNode, "inStreams"> & {inStreams: StreamInstanceRef[], id: string}
+type TargetInstance = Omit<TargetNode, "inStreams"> & {inStreams: StreamInstanceRef[], id: string}
 
 /**
- * graph config for execution
+ * graph instance for execution
  */
-export interface GraphConfig {
-    nodes: {[id in string]?: SourceConfig | FilterConfig | TargetConfig}
+export interface GraphInstance {
+    nodes: {[id in string]?: SourceInstance | FilterInstance | TargetInstance}
     sources: string[]
-    filterConfig?: {
-        inputs: StreamConfigRef[],
-        outputs: StreamConfigRef[]
+    filterInstance?: {
+        inputs: StreamInstanceRef[],
+        outputs: StreamInstanceRef[]
         filters: string[],
     }
     targets: string[]

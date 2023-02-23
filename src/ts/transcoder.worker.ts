@@ -2,7 +2,7 @@ import createModule from '../wasm/ffmpeg_built.js'
 import { Decoder, Frame, Packet, Encoder } from './codecs'
 import { WorkerHandlers } from "./message"
 import { FFmpegModule, ModuleType as FF, StdVector, StreamInfo } from './types/ffmpeg'
-import { BufferData, ChunkData, GraphConfig, SourceConfig, StreamConfigRef, StreamMetadata, TargetConfig, WriteChunkData } from "./types/graph"
+import { BufferData, ChunkData, GraphInstance, SourceInstance, StreamInstanceRef, StreamMetadata, TargetInstance, WriteChunkData } from "./types/graph"
 
 
 const streamId = (nodeId: string, streamIndex: number) => `${nodeId}:${streamIndex}`
@@ -34,13 +34,13 @@ function streamInfoToMetadata(s: StreamInfo): StreamMetadata {
 }
 
 /**
- * execute runtime for a given graph config
+ * execute runtime for a given graph instance
  */
 type SourceRuntime = 
-    { type: 'file' | 'frame', config: SourceConfig, reader: SourceReader }
+    { type: 'file' | 'frame', instance: SourceInstance, reader: SourceReader }
 
 type TargetRuntime = 
-    { type: 'file' | 'frame', config: TargetConfig, writer: TargetWriter }
+    { type: 'file' | 'frame', instance: TargetInstance, writer: TargetWriter }
 
 interface GraphRuntime {
     sources: SourceRuntime[]
@@ -91,10 +91,10 @@ handler.reply('inferFormatInfo', async ({format, url, wasm}) => {
 })
 
 // three stages should send in order: buildGraph -> nextFrame -> deleteGraph
-handler.reply('buildGraph', async ({graphConfig, wasm}) => { 
+handler.reply('buildGraph', async ({graphInstance, wasm}) => { 
     const ffmpeg = await loadModule(wasm)
     graph.ffmpeg = ffmpeg
-    await buildGraph(graphConfig, ffmpeg) 
+    await buildGraph(graphInstance, ffmpeg) 
 })
 
 handler.reply('nextFrame', async (_, transferArr) => {
@@ -206,23 +206,23 @@ class OutputIO {
 }
 
 
-async function buildGraph(graphConfig: GraphConfig, ffmpeg: FFmpegModule) {
+async function buildGraph(graphInstance: GraphInstance, ffmpeg: FFmpegModule) {
     const sources: GraphRuntime['sources'] = []
     const targets: GraphRuntime['targets'] = []
-    const { filterConfig, nodes } = graphConfig
+    const { filterInstance, nodes } = graphInstance
 
     // build input nodes
-    for (const id of graphConfig.sources) {
+    for (const id of graphInstance.sources) {
         const source = nodes[id]
         if (source?.type !== 'source') continue
         if (source.format.type == 'file') {
             const reader = await newVideoSourceReader(source)
-            sources.push({ type: 'file', reader, config: source })
+            sources.push({ type: 'file', reader, instance: source })
         }
         else {
             if (source.format.elementType == 'frame') {
                 const reader = await newFrameSourceReader(source)
-                sources.push({ type: 'frame', config: source, reader })
+                sources.push({ type: 'frame', instance: source, reader })
             }
             else {
                 throw `Stream: [${source.format.elementType}] not implemented yet`
@@ -231,37 +231,39 @@ async function buildGraph(graphConfig: GraphConfig, ffmpeg: FFmpegModule) {
     }
     
     // build filter graph
-    const filterers = filterConfig && buildFiltersGraph(filterConfig, nodes, ffmpeg)
+    const filterers = filterInstance && buildFiltersGraph(filterInstance, nodes, ffmpeg)
 
     // build output node
-    for (const id of graphConfig.targets) {
-        const target = graphConfig.nodes[id]
+    for (const id of graphInstance.targets) {
+        const target = graphInstance.nodes[id]
         if (target?.type != 'target') continue
         if (target.format.type == 'video') {
             const writer = await newVideoTargetWriter(target)
-            targets.push({ type: 'file', config: target, writer })
+            targets.push({ type: 'file', instance: target, writer })
         }
         else if (target.format.type == 'frame') {
             const writer = await newFrameTargetWriter(target)
-            targets.push({ type: 'frame', config: target, writer })
+            targets.push({ type: 'frame', instance: target, writer })
         }
     }
-
+    
     graph.sources = sources
     graph.filterers = filterers
     graph.targets = targets
+
+    console.log(graph.sources[0], graph.targets[0])
 }
 
 
 /**
  * A filter is represented by a string of the form: [in_link_1]...[in_link_N]filter_name=arguments[out_link_1]...[out_link_M]
  */
-type FilterGraph = NonNullable<GraphConfig['filterConfig']>
-function buildFiltersGraph(graphConfig: FilterGraph, nodes: GraphConfig['nodes'], module: FFmpegModule): FF['Filterer'] {
-    const {inputs, outputs, filters} = graphConfig
-    const getStream = ({from, index}: StreamConfigRef) => {
+type FilterGraph = NonNullable<GraphInstance['filterInstance']>
+function buildFiltersGraph(graphInstance: FilterGraph, nodes: GraphInstance['nodes'], module: FFmpegModule): FF['Filterer'] {
+    const {inputs, outputs, filters} = graphInstance
+    const getStream = ({from, index}: StreamInstanceRef) => {
         const node = nodes[from]
-        if (!node) throw `getStream: cannot find configNode`
+        if (!node) throw `getStream: cannot find Node intance`
         return node.outStreams[index]
     }
 
@@ -347,7 +349,7 @@ function buildFiltersGraph(graphConfig: FilterGraph, nodes: GraphConfig['nodes']
     const outputs: {[nodeId: string]: WriteChunkData[]} = {}
     graph.targets.forEach(target => {
         endWriting ? target.writer.writeEnd() : target.writer.writeFrames(frames)
-        outputs[target.config.id] = target.writer.pullOutputs()
+        outputs[target.instance.id] = target.writer.pullOutputs()
     })
     
     // delete frames
@@ -368,7 +370,7 @@ export type TargetWriter = VideoTargetWriter | FrameTargetWriter
 
 
 /* demuxer need async build */
-async function newVideoSourceReader(node: SourceConfig) {
+async function newVideoSourceReader(node: SourceInstance) {
     const ffmpeg = getFFmpeg()
     const url = node.url ?? ''
     const fileSize = node.format.type == 'file' ? node.format.fileSize : 0
@@ -388,13 +390,13 @@ async function newVideoSourceReader(node: SourceConfig) {
 }
 
 class VideoSourceReader {
-    node: SourceConfig
+    node: SourceInstance
     demuxer: FF['Demuxer']
     decoders: {[streamIndex in number]?: Decoder}
     #inputIO?: InputIO
     #endOfPacket = false
     
-    constructor(node: SourceConfig, demuxer: FF['Demuxer'], decorders: VideoSourceReader['decoders']) {
+    constructor(node: SourceInstance, demuxer: FF['Demuxer'], decorders: VideoSourceReader['decoders']) {
         this.node = node
         this.demuxer = demuxer
         this.decoders = decorders
@@ -443,7 +445,7 @@ class VideoSourceReader {
 /**
  * stream of compressed images / uncompressed video frame / uncompressed audio data
  */
-async function newFrameSourceReader(node: SourceConfig) {
+async function newFrameSourceReader(node: SourceInstance) {
     if (node.outStreams.length != 1 || node.outStreams[0].mediaType != 'video') 
             throw `FrameSourceReader only allow one video stream`
     const streamInfo = streamMetadataToInfo(node.outStreams[0])
@@ -453,7 +455,7 @@ async function newFrameSourceReader(node: SourceConfig) {
 }
 
 class FrameSourceReader {
-    node: SourceConfig
+    node: SourceInstance
     count: number = 0
     fps: number // number of frames per second (audio/video)
     streamInfo: StreamInfo
@@ -462,7 +464,7 @@ class FrameSourceReader {
     #inputIO: InputIO
     Packet: FFmpegModule['Packet']
     
-    constructor(node: SourceConfig, streamInfo: StreamInfo, useWebCodecs: boolean) {
+    constructor(node: SourceInstance, streamInfo: StreamInfo, useWebCodecs: boolean) {
         this.node = node
         this.#name = streamId(node.id, 0)
         this.fps = streamInfo.frameRate // todo...
@@ -507,7 +509,7 @@ class FrameSourceReader {
 }
 
 
-async function newVideoTargetWriter(node: TargetConfig) {
+async function newVideoTargetWriter(node: TargetInstance) {
     const ffmpeg = getFFmpeg()
     const outputIO = new OutputIO()
     const muxer = new ffmpeg.Muxer(node.format.container.formatName, outputIO)
@@ -534,7 +536,7 @@ async function newVideoTargetWriter(node: TargetConfig) {
 }
 
 class VideoTargetWriter {
-    node: TargetConfig
+    node: TargetInstance
     encoders: {[streamId: string]: Encoder}
     targetStreamIndexes: {[streamId: string]: number}
     muxer: FF['Muxer']
@@ -542,7 +544,7 @@ class VideoTargetWriter {
     firstWrite = false
     
     constructor(
-        node: TargetConfig, 
+        node: TargetInstance,
         muxer: FF['Muxer'], 
         encoders: VideoTargetWriter['encoders'],
         outputIO: OutputIO,
@@ -567,6 +569,7 @@ class VideoTargetWriter {
         // write frames
         for (const f of frames) {
             const streamId = f.name
+            console.log({streamId}, this.encoders)
             if (!this.encoders[streamId]) return
             const pkts = this.encoders[streamId].encode(f)
             pkts.forEach(pkt => {
@@ -598,7 +601,7 @@ class VideoTargetWriter {
 
 }
 
-async function newFrameTargetWriter(node: TargetConfig) {
+async function newFrameTargetWriter(node: TargetInstance) {
     if (node.outStreams.length != 1)
         throw `FrameTargetWriter only allow one stream`
     const streamInfo = streamMetadataToInfo(node.outStreams[0])
@@ -607,11 +610,11 @@ async function newFrameTargetWriter(node: TargetConfig) {
 }
 
 class FrameTargetWriter {
-    node: TargetConfig
+    node: TargetInstance
     encoder: Encoder
     #outputIO: OutputIO
     
-    constructor(node: TargetConfig, streamInfo: StreamInfo, useWebCodecs: boolean) {
+    constructor(node: TargetInstance, streamInfo: StreamInfo, useWebCodecs: boolean) {
         this.node = node
         this.encoder = new Encoder(streamInfo, useWebCodecs)
         this.#outputIO = new OutputIO()
