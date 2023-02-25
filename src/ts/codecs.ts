@@ -1,6 +1,6 @@
 /**
  * Unified WebCodecs (Web*) and FFmpeg (FF*) encoder/decoder/packet/frame.
- * All packet/frame assume time_base={num: 1, den: 1_000_000}
+ * All packet/frame assume time_base={num: 1, den: 1e6}
  * TODO...
  */
 import { getFFmpeg, vec2Array } from './transcoder.worker'
@@ -59,13 +59,14 @@ function formatWeb2FF<T extends 'pixel' | 'sample'>(type: T, format: typeof data
 
 
 // check https://cconcolato.github.io/media-mime-support/
+// https://developer.mozilla.org/en-US/docs/Web/Media/Formats/codecs_parameter
 const codecMap: {[k in string]?: string} = {
     // video codec https://www.w3.org/TR/webcodecs-codec-registry/#video-codec-registry
     av1: 'av01.0.00M.08',
     vp8: 'vp8',
     h264: 'avc1.420034',
     vp9: 'vp09.00.10.08',
-    hevc: '',
+    hevc: 'hev1.1.6.L93.B0',
     // audio codec https://www.w3.org/TR/webcodecs-codec-registry/#audio-codec-registry
     flac: 'flac',
     mp3: 'mp3',
@@ -114,12 +115,12 @@ export class Packet {
 
     toWeb() {
         if (!this.WebPacket && this.FFPacket) {
-            const timeInfo = this.FFPacket.getTimeInfo()
+            const {pts, duration} = this.FFPacket.getTimeInfo()
             const init = {
                 type: this.FFPacket.key ? 'key' : 'delta' as EncodedVideoChunkType, 
                 data: this.FFPacket.getData(), 
-                timestamp: timeInfo.pts, 
-                duration: timeInfo.duration,
+                timestamp: pts, 
+                duration,
             }
             this.WebPacket = this.mediaType == 'video' ? 
                 new EncodedVideoChunk(init) : new EncodedAudioChunk(init)
@@ -154,33 +155,37 @@ export class Frame {
         return this.FFFrame?.pts ?? this.WebFrame?.timestamp ?? 0
     }
 
-    toFF() {
+    toFF(format: string) {
         if (!this.FFFrame && this.WebFrame && this.WebFrame.format) {
             // default values
             const frameInfo: FrameInfo = {
                 format: '', height: 0, width: 0, channelLayout: '', channels: 0, sampleRate: 0, nbSamples: 0}
 
             if (this.WebFrame instanceof VideoFrame) {
-                frameInfo.format = formatWeb2FF('pixel', this.WebFrame.format)
+                frameInfo.format = formatWeb2FF('pixel', this.WebFrame.format) // todo...
                 frameInfo.height =this.WebFrame.codedHeight
                 frameInfo.width = this.WebFrame.codedWidth
             }
             else {
-                frameInfo.format = formatWeb2FF('sample', this.WebFrame.format)
-                frameInfo.channels =this.WebFrame.numberOfChannels
+                frameInfo.format = format // required FF format
+                frameInfo.channels = this.WebFrame.numberOfChannels
                 frameInfo.sampleRate = this.WebFrame.sampleRate
-                frameInfo.nbSamples = this.WebFrame.numberOfFrames // todo...
+                frameInfo.nbSamples = this.WebFrame.numberOfFrames
             }
             this.FFFrame = new (getFFmpeg()).Frame(frameInfo, this.WebFrame.timestamp ?? 0, this.#name)
             const planes = vec2Array(this.FFFrame.getPlanes())
-            planes.forEach((p, i) => this.WebFrame?.copyTo(p, {planeIndex: i}))
+            planes.forEach((p, i) => 
+                this.WebFrame?.copyTo(p, {
+                    planeIndex: i, 
+                    format: formatFF2Web('sample', format) // only for audio data
+                }))
         }
         if (!this.FFFrame) throw `Frame.toFF() failed`
 
         return this.FFFrame
     }
 
-    toWeb(streamInfo: StreamInfo) {
+    toWeb(frameRate: number) {
         if (!this.WebFrame && this.FFFrame) {
             // get planes data from AVFrame
             const planes = vec2Array(this.FFFrame.getPlanes())
@@ -194,7 +199,7 @@ export class Frame {
                     codedHeight: frameInfo.height,
                     codedWidth: frameInfo.width,
                     format: formatFF2Web('pixel', frameInfo.format),
-                    duration: 1 / streamInfo.frameRate * 1_000_000
+                    duration: 1 / frameRate * 1e6
                 }
                 planes.reduce((offset, d) => {
                     data.set(d, offset)
@@ -217,6 +222,12 @@ export class Frame {
         if (!this.WebFrame) throw `Frame.toWeb failed`
 
         return this.WebFrame
+    }
+
+    popWebFrame() {
+        const frame = this.WebFrame
+        this.WebFrame = undefined
+        return frame
     }
 
     close() {
@@ -320,25 +331,33 @@ export class Encoder {
         })
     }
 
-    encode(frame: Frame): Packet[] {
+    async encode(frame: Frame): Promise<Packet[]> {
         const mediaType = this.streamInfo.mediaType
         if (!mediaType) throw `Encoder: streamInfo.mediaType is undefined`
         // FFmpeg
         if (this.encoder instanceof getFFmpeg().Encoder) {
-            return this.#getPackets(this.encoder.encode(frame.toFF()))
+            return this.#getPackets(this.encoder.encode(frame.toFF(this.streamInfo.format)))
         }
         // WebCodecs
-        const webFrame = frame.toWeb(this.streamInfo)
+        const encoder = this.encoder
+        const getPackets = this.#getPackets.bind(this)
+        const dequeuePromise = () => new Promise<Packet[]>((resolve) => {
+                encoder.addEventListener('dequeue', function onDequeue() {
+                    resolve(getPackets())
+                    encoder.removeEventListener('dequeue', onDequeue)
+                })
+            })
+        const webFrame = frame.toWeb(this.streamInfo.frameRate)
         if (this.encoder instanceof VideoEncoder && webFrame instanceof VideoFrame) {
             this.encoder.encode(webFrame)
+            return dequeuePromise()
         }
         else if (this.encoder instanceof AudioEncoder && webFrame instanceof AudioData) {
             this.encoder.encode(webFrame)
+            return dequeuePromise()
         }
         else
             throw `Encoder.encode frame failed`
-        
-        return this.#getPackets()
     }
 
     async flush() {
@@ -364,14 +383,14 @@ const videoDecorderConfig = (streamInfo: StreamInfo): VideoDecoderConfig => ({
     codec: codecMap[streamInfo.codecName]??'',
     codedHeight: streamInfo.height,
     codedWidth: streamInfo.width,
-    description: streamInfo.extraData
+    description: streamInfo.extraData,
 })
 
 const audioDecoderConfig = (streamInfo: StreamInfo): AudioDecoderConfig => ({
     codec: codecMap[streamInfo.codecName]??'',
     numberOfChannels: streamInfo.channels,
     sampleRate: streamInfo.sampleRate,
-    description: streamInfo.extraData
+    description: streamInfo.extraData,
 })
 
 export class Decoder {
@@ -417,7 +436,7 @@ export class Decoder {
 
         if (streamInfo.mediaType == 'video') {
             try {
-                const { supported } = await VideoDecoder.isConfigSupported(videoDecorderConfig(streamInfo))
+                const { supported, config } = await VideoDecoder.isConfigSupported(videoDecorderConfig(streamInfo))
                 return supported
             } 
             catch {
@@ -426,7 +445,7 @@ export class Decoder {
         }
         else if (streamInfo.mediaType == 'audio') {
             try {
-                const { supported } = await AudioDecoder.isConfigSupported(audioDecoderConfig(streamInfo))
+                const { supported, config } = await AudioDecoder.isConfigSupported(audioDecoderConfig(streamInfo))
                 return supported
             }
             catch {
@@ -450,13 +469,21 @@ export class Decoder {
         return [...frames1, ...frames2].map(f => new Frame(f, this.#name))
     }
 
-    decode(pkt: Packet) {
+    async decode(pkt: Packet) {
         if (this.decoder instanceof getFFmpeg().Decoder) {
             return this.#getFrames(this.decoder.decode(pkt.toFF()))
         }
         else {
-            this.decoder.decode(pkt.toWeb())
-            return this.#getFrames()
+            const decoder = this.decoder
+            const getFrames = this.#getFrames.bind(this)
+            const promise = new Promise<Frame[]>((resolve) => {
+                decoder.addEventListener('dequeue', function onDequeue() {
+                    resolve(getFrames())
+                    decoder.removeEventListener('dequeue', onDequeue)
+                })
+            })
+            decoder.decode(pkt.toWeb())
+            return promise
         }
     }
 

@@ -44,7 +44,11 @@ type TargetRuntime =
 
 interface GraphRuntime {
     sources: SourceRuntime[]
-    filterers?: FF['Filterer']
+    filterGraph?: {
+        inputs: {[k in string]?: StreamMetadata},
+        outputs: {[k in string]?: StreamMetadata},
+        filterer: FF['Filterer']
+    }
     targets: TargetRuntime[]
     ffmpeg?: FFmpegModule
 }
@@ -101,13 +105,16 @@ handler.reply('nextFrame', async (_, transferArr) => {
     transferArr.push(
         ...Object.values(result.outputs).map(outs => 
             outs.map(({data}) => 'buffer' in data ? data.buffer : data)).flat())
+    // VideoFrame / AudioData should be closed (refCount--) after transferring
+    transferArr.filter(data => 'close' in data && (setTimeout(() => { data.close() })))
+
     return result
 })
 
 handler.reply('deleteGraph', () => {
     if (!graph) return
     graph.sources.forEach(source => source.reader.close())
-    graph.filterers?.delete()
+    graph.filterGraph?.filterer.delete()
     graph.targets.forEach(target => target.writer.close())
 })
 
@@ -134,7 +141,7 @@ class InputIO {
         if (this.#buffers.length > 0) return
         // cache empty, read from main thread
         // first time seek to start position
-        if (this.#offset == 0) {
+        if (this.#offset == 0 && this.#fullSize > 0) {
             await this.seek(0)
         }
         const {inputs} = await handler.send('read', undefined, undefined, this.#id)
@@ -213,23 +220,23 @@ async function buildGraph(graphInstance: GraphInstance, ffmpeg: FFmpegModule) {
     for (const id of graphInstance.sources) {
         const source = nodes[id]
         if (source?.type !== 'source') continue
-        if (source.format.type == 'file') {
+        if (source.data.type == 'file') {
             const reader = await newVideoSourceReader(source)
             sources.push({ type: 'file', reader, instance: source })
         }
         else {
-            if (source.format.elementType == 'frame') {
+            if (source.data.elementType == 'frame') {
                 const reader = await newFrameSourceReader(source)
                 sources.push({ type: 'frame', instance: source, reader })
             }
             else {
-                throw `Stream: [${source.format.elementType}] not implemented yet`
+                throw `Stream: [${source.data.elementType}] not implemented yet`
             }
         }
     }
     
     // build filter graph
-    const filterers = filterInstance && buildFiltersGraph(filterInstance, nodes, ffmpeg)
+    const filterGraph = filterInstance && buildFiltersGraph(filterInstance, nodes, ffmpeg)
 
     // build output node
     for (const id of graphInstance.targets) {
@@ -246,7 +253,7 @@ async function buildGraph(graphInstance: GraphInstance, ffmpeg: FFmpegModule) {
     }
     
     graph.sources = sources
-    graph.filterers = filterers
+    graph.filterGraph = filterGraph
     graph.targets = targets
 }
 
@@ -255,8 +262,7 @@ async function buildGraph(graphInstance: GraphInstance, ffmpeg: FFmpegModule) {
  * A filter is represented by a string of the form: [in_link_1]...[in_link_N]filter_name=arguments[out_link_1]...[out_link_M]
  */
 type FilterGraph = NonNullable<GraphInstance['filterInstance']>
-function buildFiltersGraph(graphInstance: FilterGraph, nodes: GraphInstance['nodes'], module: FFmpegModule): FF['Filterer'] {
-    const {inputs, outputs, filters} = graphInstance
+function buildFiltersGraph(graphInstance: FilterGraph, nodes: GraphInstance['nodes'], module: FFmpegModule): NonNullable<GraphRuntime['filterGraph']> {
     const getStream = ({from, index}: StreamInstanceRef) => {
         const node = nodes[from]
         if (!node) throw `getStream: cannot find Node intance`
@@ -264,12 +270,13 @@ function buildFiltersGraph(graphInstance: FilterGraph, nodes: GraphInstance['nod
     }
 
     const buffersrcArgs = (id: string, s: StreamMetadata, keyValSep='=', pairsSep=':') => {
+        const baseTimeBase = `1/1000000`
         const streamInfo: {[k: string]: number | string} = s.mediaType == 'video' ? {
             width: s.width, height: s.height, pix_fmt: s.pixelFormat, 
-            time_base: `${s.timeBase.num}/${s.timeBase.den}`,
+            time_base: baseTimeBase,
             pixel_aspect: `${s.sampleAspectRatio.num}/${s.sampleAspectRatio.den}`
         } : {
-            time_base: `${s.timeBase.num}/${s.timeBase.den}`,
+            time_base: baseTimeBase,
             sample_rate: s.sampleRate, sample_fmt: s.sampleFormat,
             channel_layout: s.channelLayout
         }
@@ -277,7 +284,7 @@ function buildFiltersGraph(graphInstance: FilterGraph, nodes: GraphInstance['nod
         return Object.entries(streamInfo).map(([k, v]) => `${k}${keyValSep}${v}`).join(pairsSep)
     }
     
-    const filterSpec = filters.map((id) => {
+    const filterSpec = graphInstance.filters.map((id) => {
         const node = nodes[id]
         if (node?.type != 'filter') return ``
         const inputs = node.inStreams.map(({from, index}) => `[${from}:${index}]`).join('')
@@ -296,25 +303,30 @@ function buildFiltersGraph(graphInstance: FilterGraph, nodes: GraphInstance['nod
     }).join(';')
 
     // build filter_grpah given spec
+    const inputs: {[k in string]?: StreamMetadata} = {}
+    const outputs: {[k in string]?: StreamMetadata} = {}
     const src2args = module.createStringStringMap()
-    inputs.forEach(ref => {
+    graphInstance.inputs.forEach(ref => {
         const id = streamId(ref.from, ref.index)
         src2args.set(id, buffersrcArgs(id, getStream(ref)))
+        inputs[id] = getStream(ref)
     })
 
     const sink2args = module.createStringStringMap()
-    outputs.forEach(ref => sink2args.set(streamId(ref.from, ref.index), ''))
+    graphInstance.outputs.forEach(ref => {
+        sink2args.set(streamId(ref.from, ref.index), '')
+        const id = streamId(ref.from, ref.index)
+        outputs[id] = getStream(ref)
+    })
     
     // both src and sink media type
     const mediaTypes = module.createStringStringMap()
-    inputs.concat(outputs).forEach(ref => 
+    graphInstance.inputs.concat(graphInstance.outputs).forEach(ref => 
         mediaTypes.set(streamId(ref.from, ref.index), getStream(ref).mediaType))
     
     const filterer = new module.Filterer(src2args, sink2args, mediaTypes, filterSpec)
 
-    // from 
-
-    return filterer
+    return {filterer, inputs, outputs}
 }
 
 
@@ -332,10 +344,17 @@ function buildFiltersGraph(graphInstance: FilterGraph, nodes: GraphInstance['nod
     const frames = await reader?.readFrames() ?? []
 
     // feed into filterer if exists
-    if (graph.filterers && frames.length != 0) {
+    if (graph.filterGraph && frames.length != 0) {
         const frameVec = getFFmpeg().createFrameVector()
-        frames.forEach((frame) => frame && frameVec.push_back(frame.toFF()))
-        const outFrameVec = graph.filterers.filter(frameVec)
+        // graph.filterers.filter
+        frames.forEach((frame) => {
+            const metadata = graph.filterGraph?.inputs[frame.name]
+            if (metadata) {
+                const format = frame.toFF(metadata.mediaType == 'video' ? metadata.pixelFormat : metadata.sampleFormat)
+                frameVec.push_back(format)
+            }
+        })
+        const outFrameVec = graph.filterGraph.filterer.filter(frameVec)
         vec2Array(outFrameVec).forEach(f => frames.push(new Frame(f, f.name)))
     }
     // signal: no frames to write anymore 
@@ -347,7 +366,7 @@ function buildFiltersGraph(graphInstance: FilterGraph, nodes: GraphInstance['nod
         if (endWriting)
             await target.writer.writeEnd()
         else
-            target.writer.writeFrames(frames)
+            await target.writer.writeFrames(frames)
         outputs[target.instance.id] = target.writer.pullOutputs()
     }
     
@@ -372,7 +391,7 @@ export type TargetWriter = VideoTargetWriter | FrameTargetWriter
 async function newVideoSourceReader(node: SourceInstance) {
     const ffmpeg = getFFmpeg()
     const url = node.url ?? ''
-    const fileSize = node.format.type == 'file' ? node.format.fileSize : 0
+    const fileSize = node.data.type == 'file' ? node.data.fileSize : 0
     const inputIO = new InputIO(node.id, url, fileSize)
     const demuxer = new ffmpeg.Demuxer()
     await demuxer.build(inputIO)
@@ -412,8 +431,8 @@ class VideoSourceReader {
 
     get progress() {
         const time = this.currentTime
-        if (this.node.format.type == 'file') {
-            return time / this.node.format.container.duration
+        if (this.node.data.type == 'file') {
+            return time / this.node.data.container.duration
         }
         return 0
     }
@@ -427,7 +446,7 @@ class VideoSourceReader {
         const pkt = new Packet(ffPkt, ffPkt.getTimeInfo().dts, decoder.mediaType)
         const frames = this.inputEnd && pkt.size == 0 ? 
                         (await decoder.flush()) : 
-                        decoder.decode(pkt)
+                        (await decoder.decode(pkt))
         // free temporary variables
         pkt.close()
 
@@ -458,7 +477,7 @@ class FrameSourceReader {
     count: number = 0
     fps: number // number of frames per second (audio/video)
     streamInfo: StreamInfo
-    decoder: Decoder
+    decoder?: Decoder
     #name: string
     #inputIO: InputIO
     Packet: FFmpegModule['Packet']
@@ -469,7 +488,8 @@ class FrameSourceReader {
         this.fps = streamInfo.frameRate // todo...
         this.#inputIO = new InputIO(node.id)
         this.streamInfo = streamInfo
-        this.decoder = new Decoder(null, this.#name, streamInfo, useWebCodecs)
+        if (streamInfo.codecName.length > 0)
+            this.decoder = new Decoder(null, this.#name, streamInfo, useWebCodecs)
         this.Packet = getFFmpeg().Packet
     }
 
@@ -483,27 +503,29 @@ class FrameSourceReader {
 
     async readFrames(): Promise<Frame[]> {
         const image = await this.#inputIO.readImage()
-        if (!image && this.inputEnd) {
-            return this.decoder.flush()
+        if (!image && this.inputEnd && this.decoder) {
+            return await this.decoder.flush()
         }
         else if (!image) return []
         const pts = this.count
         this.count += 1
         const duration = 1 / this.fps
-        if ('byteLength' in image) {
+        if ('byteLength' in image && this.decoder) {
             const pkt = new this.Packet(image.byteLength, {pts, dts: pts, duration})
             pkt.getData().set(new Uint8Array(image))
             const mediaType = this.streamInfo.mediaType
             if (!mediaType) throw `FrameSourceReader: StreamInfo.mediaType is undefined`
-            return this.decoder.decode(new Packet(pkt, pts, mediaType))
+            return await this.decoder.decode(new Packet(pkt, pts, mediaType))
         }
-        else {
+        else if ('buffer' in image) {
+            throw `BufferData cannot directly as frame`
+        }
+        else
             return [new Frame(image, this.#name)]
-        }
     }
 
     close() {
-        this.decoder.close()
+        this.decoder?.close()
     }
 }
 
@@ -559,7 +581,7 @@ class VideoTargetWriter {
     /**
      * @param frames last writing when frames=undefined
      */
-    writeFrames(frames: Frame[]) {
+    async writeFrames(frames: Frame[]) {
         // start writing
         if (!this.firstWrite) {
             this.firstWrite = true
@@ -569,7 +591,7 @@ class VideoTargetWriter {
         for (const f of frames) {
             const streamId = f.name
             if (!this.encoders[streamId]) continue
-            const pkts = this.encoders[streamId].encode(f)
+            const pkts = await this.encoders[streamId].encode(f)
             for (const pkt of pkts) {
                 this.muxer.writeFrame(pkt.toFF(), this.targetStreamIndexes[streamId])
                 pkt.close()
@@ -625,23 +647,24 @@ class FrameTargetWriter {
         }
     }
 
-    writeFrames(frames: Frame[]) {
+    async writeFrames(frames: Frame[]) {
         // use inStream ref
         const {from, index} = this.node.inStreams[0]
         const selfFrames = frames.filter(f => f.name == streamId(from, index))
-        const rawVideo = this.node.outStreams[0].codecName == ''
-        selfFrames.forEach(f => {
+        const rawVideo = this.node.outStreams[0].codecName == 'rawvideo'
+        for (const f of selfFrames) {
             if (rawVideo) {
-                if (f.WebFrame)
-                    this.#outputIO.write(f.WebFrame)
+                const webFrame = f.popWebFrame() // todo... FFFrame
+                if (webFrame)
+                    this.#outputIO.write(webFrame)
                 else
                     throw `Output rawvideo (bitmap) not implemented`
             }
             else {
-                const pktVec = this.encoder.encode(f)
+                const pktVec = await this.encoder.encode(f)
                 this.#pktVec2outputs(pktVec)
             }
-        })
+        }
     }
     
     /* flush at end of writing */

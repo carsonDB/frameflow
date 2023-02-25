@@ -30,29 +30,30 @@ interface SourceArgs {
  * @param options 
  * @returns 
  */
-async function createSource(src: SourceType, args?: SourceArgs) {
+async function createSource(source: SourceType, args?: SourceArgs) {
     const id = uuid() // temporarily node id for getMetadata
-    const {size, url} = await getSourceInfo(src)
+    const {size, url} = await getSourceInfo(source)
     const worker = new FFWorker(createWorker())
     // check if file or stream
-    if (size > 0) {
+    if (size > 0 && !(source instanceof ReadableStream)) {
         // start a worker to probe data
-        const reader = new FileReader(id, src, worker)
+        const reader = new FileReader(id, source, worker)
         // convert all src to stream
         const wasm = await loadWASM()
         const {streams, container} = await worker.send('getMetadata', {id, fullSize: size, url: url??'', wasm})
-        const srcTracks = new SourceTrackGroup(src, streams, {type: 'file', container, fileSize: size})
+        const srcTracks = new SourceTrackGroup(streams, {type: 'file', container, fileSize: size, source})
         reader.close()
         return srcTracks
     }
     else {
-        const stream = await sourceToStreamCreator(src)(0)
+        const stream = await sourceToStreamCreator(source)(0)
         const reader = new StreamReader(id, [], stream, worker)
         const firstChunk = await reader.probe()
         // get metadata directly from image/samples
         if (firstChunk instanceof VideoFrame || firstChunk instanceof AudioData) {
             const streamMetadata = webFrameToStreamMetadata(firstChunk, args??{})
-            const srcTracks = new SourceTrackGroup(src, [streamMetadata], {type: 'stream', elementType: 'frame'})
+            const srcTracks = new SourceTrackGroup(
+                [streamMetadata], {type: 'stream', elementType: 'frame', source: stream})
             reader.close(srcTracks.node)
             return srcTracks
         }
@@ -154,29 +155,31 @@ class Track extends TrackGroup {
     constructor(stream: StreamRef) {
         super([stream])
     }
+    
     get metadata() { return this.streams[0].from.outStreams[this.streams[0].index] }
 }
 
 
 class SourceTrackGroup extends TrackGroup {
     node: SourceNode
-    constructor(source: SourceType, streams: StreamMetadata[], formatInfo: SourceNode['format']) {
-        const node: SourceNode = { type:'source', outStreams: streams, source, format: formatInfo }
+    constructor(streams: StreamMetadata[], data: SourceNode['data']) {
+        const node: SourceNode = { type:'source', outStreams: streams, data }
         super(streams.map((s, i) => ({from: node, index: i}) ))
         this.node = node
     }
 
     get metadata() { 
-        if (this.node.format.type == 'file') {
+        if (this.node.data.type == 'file') {
             return {
-                ...this.node.format.container, 
+                ...this.node.data.container, 
                 tracks: this.node.outStreams
             }
         }
+        throw `SourceNode is stream, not implemented yet.`
     }
 
     get duration() {
-        return this.node.format.type == 'file' ? this.node.format.container.duration : 0
+        return this.node.data.type == 'file' ? this.node.data.container.duration : 0
     }
 
 }
@@ -303,7 +306,7 @@ interface ExportArgs {
     audio?: MediaStreamArgs, // audio track configurations in video container
     video?: MediaStreamArgs // video track configurations in video container
     /* Export args */
-    disableWebCodecs?: boolean,
+    webCodecs?: boolean | {video?: boolean, audio?: boolean}, // todo...
     progress?: (pg: number) => void
 }
 

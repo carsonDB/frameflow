@@ -34,8 +34,8 @@ export function buildGraphInstance(target: TargetNode): [GraphInstance, Map<User
     node2id.forEach((id, node) => {
         if (node.type == 'source') {
             sources.push(id)
-            const {source: _, ...rest} = node
-            nodeInstances[id] = {...rest, id}
+            const {data: {source: _, ...dataRest}, ...rest} = node
+            nodeInstances[id] = {...rest, id, data: {...dataRest}}
         }
         else if (node.type == 'filter') {
             filterInstance.filters.push(id)
@@ -80,8 +80,9 @@ function completeGraph(target: TargetNode): TargetNode {
         const inS = inRef.from.outStreams[inRef.index]
 
         if (inS.mediaType == 'video' && outS.mediaType == 'video') {
-            if (inS.pixelFormat != outS.pixelFormat)
-                return applySingleFilter([inRef], {type: 'format', args: {pixelFormat: outS.pixelFormat}})[0]
+            console.warn('disable pixel format convert')
+            // if (inS.pixelFormat != outS.pixelFormat)
+            //     return applySingleFilter([inRef], {type: 'format', args: {pixelFormat: outS.pixelFormat}})[0]
         }
         else if (inS.mediaType == 'audio' && outS.mediaType == 'audio') {
             const keys = ['sampleFormat', 'sampleRate', 'channelLayout'] as const

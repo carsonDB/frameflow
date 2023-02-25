@@ -10,31 +10,54 @@
 <body>
     <script>
         window.onload = () => window.fflow = frameflow
-
     </script>
 
-    <h2>Decode</h2>
+    <p>WebCodecs: Only available in Chromium-base client</p>
+
+    <h2>👉Decode: mp4 Video to canvas (real-time)</h2>
     <canvas id="decode_canvas" ></canvas>
     <button id="decode_button">Decode</button>
     <script>
         const canvas = document.getElementById('decode_canvas')
         const ctx = canvas.getContext('2d')
         document.getElementById('decode_button').onclick = async () => {
-            const video = await fflow.source('../assets/Bunny.mp4')
-            const target = await video.filter('video').export({format: 'rawvideo'})
-            // simple way (maybe not precise)
-            const id = setInterval(async () => {
-                if (target.end) 
-                    clearInterval(id)
+            const trackGroup = await fflow.source('../assets/Bunny.mp4')
+            const videoTrack = trackGroup.filter('video').tracks()[0]
+            const { height, width, frameRate } = videoTrack.metadata
+            const target = await videoTrack.export({format: 'rawvideo'})
+            canvas.height = height
+            canvas.width = width
+            // render each frame
+            async function renderFrame() {
                 const chunk = await target.next()
+                if (target.end) return
                 if (!chunk.videoFrame) {
-                    clearInterval(id)
                     throw `chunk.videoFrame is undefined`
                 }
                 ctx.drawImage(chunk.videoFrame, 0, 0)
-            }, target.frameRate)
+                chunk.videoFrame.close()
+                // simple way (maybe not precise)
+                setTimeout(renderFrame, 1/frameRate*1000)
+            }
+            await renderFrame()
         }
 
+    </script>
+
+
+    <h2>👉Encode: Screen record to mp4 video (real-time) </h2>
+    <video id="encode-video" controls></video><br />
+    <button id="encode-button">Record</button>
+    <script>
+        document.getElementById('encode-button').onclick = async () => {
+            const stream = await navigator.mediaDevices.getDisplayMedia({ video: {mediaSource: 'screen'} })
+            const track = stream.getTracks()[0]
+            const trackProcessor = new MediaStreamTrackProcessor(track)
+            const readableStream = trackProcessor.readable
+            const src = await fflow.source(readableStream)
+            const blob = await src.exportTo(Blob, {format: 'mp4'})
+            document.getElementById('encode-video').src = URL.createObjectURL(blob)
+        }
     </script>
 
 </body>

@@ -252,9 +252,9 @@ export async function newExporter(node: TargetNode, worker: FFWorker) {
     // create readers from sources
     for (const [node, id] of node2id) {
         if (node.type != 'source') continue
-        const reader = node.format.type == 'file' ? 
-            new FileReader(id, node.source, worker) :
-            new StreamReader(id, SourceCacheData.get(node) ?? [], node.source, worker)
+        const reader = node.data.type == 'file' ? 
+            new FileReader(id, node.data.source, worker) :
+            new StreamReader(id, SourceCacheData.get(node) ?? [], node.data.source, worker)
         readers.push(reader)
     }
     const wasm = await loadWASM()
@@ -280,13 +280,9 @@ export class Exporter {
         // todo... temporarily only output one target
         if (Object.values(outputs).length !=  1) throw `Currently only one target at a time allowed`
         const output = Object.values(outputs)[0]
-        const holder = (output??[]).map(d => new Chunk(d))
+        const chunks = (output??[]).map(d => new Chunk(d))
         
-        return {
-            output: holder, 
-            progress, 
-            done: endWriting
-        }
+        return { output: chunks, progress, done: endWriting }
     }
 
     async close() {

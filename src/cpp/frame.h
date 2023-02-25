@@ -31,7 +31,9 @@ class Frame {
     int align = 32;
     std::string _name; // streamId
 public:
-    Frame() {} // todo... remove
+    Frame() {
+        av_frame = av_frame_alloc(); // don't remove alloc (called by Class default constructor)
+    }
     Frame(std::string name) {
         this->_name = name;
         av_frame = av_frame_alloc(); 
@@ -72,7 +74,7 @@ public:
                     &av_frame->linesize[0], av_frame->channels, 
                     av_frame->nb_samples, (AVSampleFormat)av_frame->format, 0);
                 auto plane = val(typed_memory_view((size_t)av_frame->linesize[0], av_frame->extended_data[i]));
-                CHECK(size < 0, "failed on av_samples_get_buffer_size");
+                CHECK(size >= 0, "failed on av_samples_get_buffer_size");
                 data.push_back(plane);
             }
         }

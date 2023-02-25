@@ -3,7 +3,7 @@
  *  UserGraph -> GraphInstance -> GraphRuntime
  */
 
-import { SourceType } from "../streamIO"
+import { SourceStream } from "../globals"
 
 export type BufferData = Uint8Array | Buffer
 export type ChunkData = BufferData | VideoFrame | AudioData
@@ -65,12 +65,14 @@ export type StreamMetadata = AudioStreamMetadata | VideoStreamMetadata
  * user defined graph
  */
 type UserNode = SourceNode | FilterNode | TargetNode
-export type SourceType = ReadableStream<BufferData> | string | URL | RequestInfo | Blob | BufferData
+export type SourceType = ReadableStream<ChunkData> | string | URL | RequestInfo | Blob | BufferData
+type FileSource = string | URL | RequestInfo | Blob | BufferData
+type StreamSource = SourceStream<ChunkData>
 interface StreamRef { from: SourceNode | FilterNode, index: number }
 export interface SourceNode {
-    type: 'source', outStreams: StreamMetadata[], source: SourceType, url?: string
-    format: { type: 'file', container: FormatMetadata, fileSize: number } | 
-            { type: 'stream', elementType: 'frame' | 'chunk' }
+    type: 'source', outStreams: StreamMetadata[], url?: string
+    data: { type: 'file', container: FormatMetadata, fileSize: number, source: FileSource } | 
+            { type: 'stream', elementType: 'frame' | 'chunk', source: StreamSource }
 }
 
 interface FilterNode {
@@ -84,7 +86,11 @@ interface TargetNode {
 }
 
 type StreamInstanceRef = {from: string, index: number}
-type SourceInstance = Omit<SourceNode, "source"> & {id: string}
+type SourceInstance = 
+    Omit<SourceNode, "data"> & 
+    {id: string} & 
+    {data: Omit<Exclude<SourceNode['data'], {type: "file"}>, "source"> | 
+           Omit<Exclude<SourceNode['data'], {type: "stream"}>, "source"> }
 type FilterInstance = Omit<FilterNode, "inStreams"> & {inStreams: StreamInstanceRef[], id: string}
 type TargetInstance = Omit<TargetNode, "inStreams"> & {inStreams: StreamInstanceRef[], id: string}
 
