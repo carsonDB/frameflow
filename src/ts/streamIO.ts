@@ -1,4 +1,4 @@
-import { SourceStream } from './globals'
+import { globalFlags, SourceStream } from './globals'
 import { buildGraphInstance } from './graph'
 import { loadWASM } from './loader'
 import { FFWorker } from "./message"
@@ -119,7 +119,7 @@ export class FileReader {
     
     #enableReply() {
         
-        this.worker.reply('read', async () => {
+        this.worker.reply('read', async (_, transferArr) => {
             // create stream for the first time
             this.stream = this.stream ?? (await this.streamCreator(0))
             const data = await this.stream.read()
@@ -130,7 +130,7 @@ export class FileReader {
             //     this.#ondataReady = () => {} // only call once
             // }, 0)
             // this.#dataReady = true
-
+            data && transferArr.push('buffer' in data ? data.buffer : data)
             return {inputs: data ? [data] : []}
         }, this.#id)
 
@@ -172,8 +172,9 @@ export class StreamReader {
     }
 
     #enableReply() {
-        this.worker.reply('read', async () => {
+        this.worker.reply('read', async (_, transferArr) => {
             const chunk = await this.read()
+            chunk && transferArr.push('buffer' in chunk ? chunk.buffer : chunk )
             return {inputs: chunk ? [chunk] : []}
         }, this.#id)
         
@@ -258,7 +259,7 @@ export async function newExporter(node: TargetNode, worker: FFWorker) {
         readers.push(reader)
     }
     const wasm = await loadWASM()
-    await worker.send('buildGraph', { graphInstance, wasm }) 
+    await worker.send('buildGraph', { graphInstance, wasm, flags: globalFlags.get() }) 
     
     return new Exporter(worker, readers)
 }

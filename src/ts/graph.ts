@@ -80,9 +80,9 @@ function completeGraph(target: TargetNode): TargetNode {
         const inS = inRef.from.outStreams[inRef.index]
 
         if (inS.mediaType == 'video' && outS.mediaType == 'video') {
-            console.warn('disable pixel format convert')
-            // if (inS.pixelFormat != outS.pixelFormat)
-            //     return applySingleFilter([inRef], {type: 'format', args: {pixelFormat: outS.pixelFormat}})[0]
+            // console.warn('disable pixel format convert')
+            if (inS.pixelFormat != outS.pixelFormat)
+                return applySingleFilter([inRef], {type: 'format', args: {pixelFormat: outS.pixelFormat}})[0]
         }
         else if (inS.mediaType == 'audio' && outS.mediaType == 'audio') {
             const keys = ['sampleFormat', 'sampleRate', 'channelLayout'] as const

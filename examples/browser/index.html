@@ -11,78 +11,11 @@
 </head>
 
 <body>
-    <script>
-        /**
-         * Rename frameflow to fflow. Just like: ES6 import (optional)
-         * import fflow from 'frameflow'
-         */
-        window.onload = () => window.fflow = frameflow
-    </script>
+    <p>Please use GitHub latest release codes (tested)</p>
 
-    <p>Here are some examples, each starts with 👉.</p>
-    <p>Please open console to see more information.</p>
-
+    <p><a href="browser/demo.html" >Demo</a></p>
     <p><a href="browser/codec.html" >Encode / Decode</a></p>
     <p><a href="browser/todo.html" >TODO (developing)</a></p>
-
-    <h2>👉Fetch and get metadata</h2>
-    <button id="metadata">Metadata</button>
-    <script>
-        document.getElementById('metadata').onclick = async () => {
-            // const src = await fflow.source("./assets/flame.avi")
-            const src = await fflow.source("./assets/Bunny.mp4")
-            console.log('Metadata:', src.metadata)
-        }
-    </script>
-
-
-    <h2>👉Trancode</h2>
-    <video id="transcode-video" controls src="./assets/flame.avi"></video><br />
-    <button id="transcode">Transcode</button>
-    <span id="transcode-progress"></span>
-    <script>
-        document.getElementById('transcode').onclick = async () => {
-            const onProgress = pg => document.getElementById('transcode-progress').textContent = `${(pg*100).toFixed(2)}%`
-            const src = await fflow.source('./assets/flame.avi')
-            const blob = await src.filter('video').exportTo(Blob, {format: 'mp4', progress: onProgress})
-            document.getElementById('transcode-video').src = URL.createObjectURL(blob)
-        }
-    </script>
-
-
-    <h2>👉Filter: trim</h2>
-    <video id="trim-video" controls></video><br />
-    <button id="trim">Trim</button>
-    <span id="trim-progress"></span>
-    <script>
-        document.getElementById('trim').onclick = async () => {
-            const onProgress = pg => document.getElementById('trim-progress').textContent = `${(pg*100).toFixed(2)}%`
-            const src = await fflow.source('./assets/flame.avi')
-            const trimSrc = src.trim({start: 1, duration: 1})
-            const blob = await trimSrc.exportTo(Blob, {format: 'mp4', progress: onProgress}) 
-            document.getElementById('trim-video').src = URL.createObjectURL(blob)
-        }
-    </script>
-
-
-    <h2>👉Hybrid: trim + transcode + mux</h2>
-    <video id="mux-video" controls></video><br />
-    <audio id="mux-audio" controls src="./assets/audio.mp3" ></audio>
-    <button id="mux">Mux</button>
-    <span id="mux-progress"></span>
-    <script>
-        document.getElementById('mux').onclick = async () => {
-            const onProgress = pg => document.getElementById('mux-progress').textContent = `${(pg*100).toFixed(2)}%`
-            const video = await fflow.source('./assets/flame.avi')
-            const audio = await fflow.source('./assets/audio.mp3')
-            const bgm = audio.setVolume(2)
-                             .trim({start: 2, duration: 2})
-                            //  .loop(video.duration) // bug...
-            const output = fflow.group([video, bgm])
-            const blob = await output.exportTo(Blob, {format: 'mp4', progress: onProgress}) 
-            document.getElementById('mux-video').src = URL.createObjectURL(blob)
-        }
-    </script>
 
 </body>
 

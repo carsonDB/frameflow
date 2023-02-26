@@ -2,6 +2,7 @@ import createModule from '../wasm/ffmpeg_built.js'
 import { Decoder, Frame, Packet, Encoder } from './codecs'
 import { WorkerHandlers } from "./message"
 import { FFmpegModule, ModuleType as FF, StdVector, StreamInfo } from './types/ffmpeg'
+import { Flags } from './types/flags'
 import { BufferData, ChunkData, GraphInstance, SourceInstance, StreamInstanceRef, StreamMetadata, TargetInstance, WriteChunkData } from "./types/graph"
 
 
@@ -50,11 +51,13 @@ interface GraphRuntime {
         filterer: FF['Filterer']
     }
     targets: TargetRuntime[]
+    flags: Flags
     ffmpeg?: FFmpegModule
 }
 const graph: GraphRuntime = {
     sources: [],
     targets: [],
+    flags: {}
 }
 
 export function getFFmpeg() {
@@ -93,9 +96,10 @@ handler.reply('inferFormatInfo', async ({format, url, wasm}) => {
 })
 
 // three stages should send in order: buildGraph -> nextFrame -> deleteGraph
-handler.reply('buildGraph', async ({graphInstance, wasm}) => { 
+handler.reply('buildGraph', async ({graphInstance, wasm, flags}) => { 
     const ffmpeg = await loadModule(wasm)
     graph.ffmpeg = ffmpeg
+    graph.flags = flags
     await buildGraph(graphInstance, ffmpeg) 
 })
 
@@ -105,8 +109,6 @@ handler.reply('nextFrame', async (_, transferArr) => {
     transferArr.push(
         ...Object.values(result.outputs).map(outs => 
             outs.map(({data}) => 'buffer' in data ? data.buffer : data)).flat())
-    // VideoFrame / AudioData should be closed (refCount--) after transferring
-    transferArr.filter(data => 'close' in data && (setTimeout(() => { data.close() })))
 
     return result
 })

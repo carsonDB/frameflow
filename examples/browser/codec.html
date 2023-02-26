@@ -12,7 +12,7 @@
         window.onload = () => window.fflow = frameflow
     </script>
 
-    <p>WebCodecs: Only available in Chromium-base client</p>
+    <p>use WebCodecs: Only available in Chromium-base client</p>
 
     <h2>👉Decode: mp4 Video to canvas (real-time)</h2>
     <canvas id="decode_canvas" ></canvas>
@@ -54,7 +54,7 @@
             const track = stream.getTracks()[0]
             const trackProcessor = new MediaStreamTrackProcessor(track)
             const readableStream = trackProcessor.readable
-            const src = await fflow.source(readableStream)
+            const src = await fflow.source(readableStream, {frameRate: track.getSettings().frameRate})
             const blob = await src.exportTo(Blob, {format: 'mp4'})
             document.getElementById('encode-video').src = URL.createObjectURL(blob)
         }

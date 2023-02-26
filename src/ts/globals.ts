@@ -3,7 +3,20 @@
  * TODO...
  */
 
+import { Flags } from './types/flags'
 import { isNode, isBrowser } from './utils'
+
+
+class GlobalFlags {
+    #flags: Flags = {}
+    set(obj: Flags) {
+        Object.assign(this.#flags, obj)
+    }
+    get() {
+        return structuredClone(this.#flags)
+    }
+}
+export const globalFlags = new GlobalFlags()
 
 export const Worker = isNode ? require('worker_threads').Worker : window.Worker
 

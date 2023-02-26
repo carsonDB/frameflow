@@ -3,6 +3,7 @@
  * All packet/frame assume time_base={num: 1, den: 1e6}
  * TODO...
  */
+import { formatFF2Web, formatWeb2FF } from './metadata'
 import { getFFmpeg, vec2Array } from './transcoder.worker'
 import { ModuleType as FF, FrameInfo, StreamInfo, StdVector } from './types/ffmpeg'
 
@@ -12,50 +13,6 @@ type WebFrame = VideoFrame | AudioData
 type WebEncoder = VideoEncoder | AudioEncoder
 type WebDecoder = VideoDecoder | AudioDecoder
 
-
-// const ts_rescale = (time: number, from: AVRational, to: AVRational) => {
-//     return time * from.num / from.den * to.den / to.num
-// }
-
-
-const dataFormatMap: 
-    { pixel: {ff: string, web: VideoPixelFormat}[], 
-      sample: {ff: string, web: AudioSampleFormat}[] } = 
-{
-    pixel: [
-        {ff: 'yuv420p', web: 'I420'},
-        {ff: 'yuva420p', web: 'I420A'},
-        {ff: 'yuv422p', web: 'I422'},
-        {ff: 'yuv444p', web: 'I444'},
-        {ff: 'nv12', web: 'NV12'},
-        {ff: 'rgba', web: 'RGBA'}, // choose when ff2web
-        {ff: 'rgba', web: 'RGBX'},
-        {ff: 'bgra', web: 'BGRA'}, // choose when ff2web
-        {ff: 'bgra', web: 'BGRX'},
-    ],
-    sample: [
-        {ff: 'u8', web: 'u8'},
-        {ff: 'u8p', web: 'u8-planar'},
-        {ff: 's16', web: 's16'},
-        {ff: 's16p', web: 's16-planar'},
-        {ff: 's32', web: 's32'},
-        {ff: 's32p', web: 's32-planar'},
-        {ff: 'flt', web: 'f32'},
-        {ff: 'fltp', web: 'f32-planar'},
-    ],
-}
-
-function formatFF2Web<T extends 'pixel' | 'sample'>(type: T, format: string): typeof dataFormatMap[T][0]['web'] {
-    for (const {ff, web} of dataFormatMap[type])
-        if (ff == format) return web
-    throw `Cannot find ${type} format: FF ${format}`
-}
-
-function formatWeb2FF<T extends 'pixel' | 'sample'>(type: T, format: typeof dataFormatMap[T][0]['web']): string {
-    for (const {ff, web} of dataFormatMap[type])
-        if (web == format) return ff
-    throw `Cannot find ${type} format: Web ${format}`
-}
 
 
 // check https://cconcolato.github.io/media-mime-support/
@@ -79,15 +36,19 @@ const codecMap: {[k in string]?: string} = {
 export class Packet {
     FFPacket?: FF['Packet']
     WebPacket?: WebPacket
-    dts = 0
+    dts: number
     mediaType: 'video' | 'audio'
     constructor(pkt: FF['Packet'] | WebPacket, dts: number, mediaType: 'video' | 'audio') {
         this.dts = dts
         this.mediaType = mediaType
         if (pkt instanceof getFFmpeg().Packet)
             this.FFPacket = pkt
-        else
+        else {
+            // todo...
+            if (this.dts == 0)
+                this.dts = pkt.timestamp
             this.WebPacket = pkt
+        }
     }
 
     get size() {
@@ -145,8 +106,9 @@ export class Frame {
         if (frame instanceof getFFmpeg().Frame) {
             this.FFFrame = frame
         }
-        else
+        else {
             this.WebFrame = frame
+        }
     }
 
     get name() { return this.#name }
@@ -242,6 +204,7 @@ const videoEncorderConfig = (streamInfo: StreamInfo): VideoEncoderConfig => {
         codec: codecMap[streamInfo.codecName] ?? '',
         height: streamInfo.height,
         width: streamInfo.width,
+        framerate: streamInfo.frameRate
     }
     
     if (config.codec.includes('avc'))
@@ -325,6 +288,7 @@ export class Encoder {
         const mediaType = this.streamInfo.mediaType
         if (!mediaType) throw `Encoder.#getPackets mediaType is undefined`
         return [...pkts1, ...pkts2].map(p => {
+            // todo... packet pts, dts
             const pkt = new Packet(p, this.#dts, mediaType)
             this.#dts += pkt.duration
             return pkt

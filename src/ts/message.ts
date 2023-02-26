@@ -1,6 +1,7 @@
 // import { Worker } from 'worker_threads'
 
 import { InferredFormatInfo } from "./types/ffmpeg"
+import { Flags } from "./types/flags"
 import { ChunkData, FormatMetadata, GraphInstance, StreamMetadata, WriteChunkData } from "./types/graph"
 
 
@@ -15,7 +16,7 @@ interface Messages {
         reply: InferredFormatInfo
     }
     buildGraph: {
-        send: { graphInstance: GraphInstance, wasm: ArrayBuffer }
+        send: { graphInstance: GraphInstance, wasm: ArrayBuffer, flags: Flags }
         reply: void
     }
     nextFrame: {
@@ -49,12 +50,14 @@ type AllReplyCallback<T extends MessageType | BackMessageType> =
 
 type TransferArray = (Transferable | VideoFrame | AudioData)[]
 
+// close VideoFrame/AudioData (refCount--)
+const closeTransferArray = (arr: TransferArray) => arr.forEach(data => 'close' in data && data.close())
 
 function sendMessage<T extends AllMessageType>(
     sender: any, 
     sendMsg: T, 
     data: AllMessages[T]['send'],
-    transferArray?: TransferArray,
+    transferArray: TransferArray = [],
     id=''
 ) {
     const promise = new Promise<AllMessages[T]['reply']>((resolve, reject) => {
@@ -73,7 +76,9 @@ function sendMessage<T extends AllMessageType>(
         })
     })
     const msg: AllPostMessage = {type: sendMsg, data, id} // make sure id cannot missing
-    sender.postMessage(msg, transferArray ?? [])
+    sender.postMessage(msg, transferArray)
+    closeTransferArray(transferArray)
+
     return promise
 }
 
@@ -91,12 +96,14 @@ function replyMessage<T extends AllMessageType>(
         if (replyData instanceof Promise) {
             replyData.then(data => {
                 const msg: AllPostMessage = {type, data, id} // make sure id cannot missing
-                replier.postMessage(msg)
-            })
+                replier.postMessage(msg, [...transferArr])
+                closeTransferArray(transferArr)
+        })
         }
         else {
             const msg: AllPostMessage = {type, data: replyData, id} // make sure id cannot missing
             replier.postMessage(msg, [...transferArr])
+            closeTransferArray(transferArr)
         }
         // dont delete callback, since it register once, always listen to main thread
     })

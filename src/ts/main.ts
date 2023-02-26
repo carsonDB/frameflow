@@ -9,9 +9,11 @@ import { loadWASM as _loadWASM } from './loader'
 import { FFWorker } from "./message"
 import { Chunk, Exporter, FileReader, getSourceInfo, newExporter, sourceToStreamCreator, StreamReader } from "./streamIO"
 import { BufferData, SourceNode, SourceType, StreamMetadata, StreamRef, TargetNode } from "./types/graph"
+import { Flags } from './types/flags'
 import { isNode } from './utils'
 import { webFrameToStreamMetadata } from './metadata'
 import Worker from 'worker-loader?inline=no-fallback!./transcoder.worker.ts'
+import { globalFlags } from './globals'
 
 
 
@@ -306,7 +308,6 @@ interface ExportArgs {
     audio?: MediaStreamArgs, // audio track configurations in video container
     video?: MediaStreamArgs // video track configurations in video container
     /* Export args */
-    webCodecs?: boolean | {video?: boolean, audio?: boolean}, // todo...
     progress?: (pg: number) => void
 }
 
@@ -341,6 +342,8 @@ async function createTargetNode(inStreams: StreamRef[], args: ExportArgs, worker
 /////////////////////////////
 // All exports APIs are below.
 /////////////////////////////
+
+export const setFlags = (flags: Flags) => globalFlags.set(flags)
 
 /**
  * Create source (`SourceTrackGroup`) in one function. 
