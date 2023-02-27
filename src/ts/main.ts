@@ -41,7 +41,7 @@ async function createSource(source: SourceType, args?: SourceArgs) {
         // start a worker to probe data
         const reader = new FileReader(id, source, worker)
         // convert all src to stream
-        const wasm = await loadWASM()
+        const wasm = await _loadWASM()
         const {streams, container} = await worker.send('getMetadata', {id, fullSize: size, url: url??'', wasm})
         const srcTracks = new SourceTrackGroup(streams, {type: 'file', container, fileSize: size, source})
         reader.close()
@@ -62,8 +62,6 @@ async function createSource(source: SourceType, args?: SourceArgs) {
         else
             throw `Only stream imgae/samples are allowed`
     }
-
-
 }
 
 
@@ -315,7 +313,7 @@ async function createTargetNode(inStreams: StreamRef[], args: ExportArgs, worker
     // infer container format from url
     if (!args.format && !args.url) throw `must provide format name or url`
     const {format, video, audio} = await worker.send('inferFormatInfo',
-        { format: args.format ?? '', url: args.url ?? '', wasm: await loadWASM() })
+        { format: args.format ?? '', url: args.url ?? '', wasm: await _loadWASM() })
     
     const type = format.includes('rawvideo') ?
         'frame' :
@@ -343,43 +341,49 @@ async function createTargetNode(inStreams: StreamRef[], args: ExportArgs, worker
 // All exports APIs are below.
 /////////////////////////////
 
-export const setFlags = (flags: Flags) => globalFlags.set(flags)
+export default {
+    setFlags: (flags: Flags) => globalFlags.set(flags),
 
-/**
- * Create source (`SourceTrackGroup`) in one function. 
- * @param src ReadableStream<Uint8Array | Buffer> | string | URL | Request | Blob | Buffer | Uint8Array
- * @param options unused temporarily
- * @returns SourceTrackGroup can be used further.
- */
-export const source = (src: SourceType, options?: {}) => createSource(src, options)
+    /**
+     * Create source (`SourceTrackGroup`) in one function. 
+     * @param src ReadableStream<Uint8Array | Buffer> | string | URL | Request | Blob | Buffer | Uint8Array
+     * @param options unused temporarily
+     * @returns SourceTrackGroup can be used further.
+     */
+    source: (src: SourceType, options?: {}) => createSource(src, options),
+    
+    /** 
+    * Convert array of Track or TrackGroup into one TrackGroup.
+    * This is convenient when we need to apply operations on multiple tracks.
+    * Track[] -> TrackGroup
+    */
+    group: (trackArr: (TrackGroup | Track)[]) => new TrackGroup(trackArr.map(t => t.streams).flat()),
 
-/** 
-* Convert array of Track or TrackGroup into one TrackGroup.
-* This is convenient when we need to apply operations on multiple tracks.
-* Track[] -> TrackGroup
-*/
-export const group = (trackArr: (TrackGroup | Track)[]) => new TrackGroup(trackArr.map(t => t.streams).flat())
+    /**
+     * Multiple audio tracks merge into one audio track.
+     */
+    merge: (trackArr: (TrackGroup | Track)[]) => 
+        new FilterTrackGroup({ type: 'merge' }, null, trackArr.map(t => t.streams)),
 
-/**
- * Multiple audio tracks merge into one audio track.
- */
-export const merge = (trackArr: (TrackGroup | Track)[]) => 
-    new FilterTrackGroup({ type: 'merge' }, null, trackArr.map(t => t.streams))
+    /**
+     * Concat multiple tracks along timeline.
+     * @param trackArr 
+     * @returns 
+     */
+    concat: (trackArr: (TrackGroup | Track)[]) => 
+        new FilterTrackGroup({ type: 'concat' }, null, trackArr.map(t => t.streams)),
 
-/**
- * Concat multiple tracks along timeline.
- * @param trackArr 
- * @returns 
- */
-export const concat = (trackArr: (TrackGroup | Track)[]) => 
-    new FilterTrackGroup({ type: 'concat' }, null, trackArr.map(t => t.streams))
+    /**
+     * Preload of wasm binary file.
+     * 
+     * This function can be called multiple times, but only fetch once.
+     * So don't worry about repetitive calls.
+     * 
+     * @returns ArrayBuffer wasm binary
+     */
+    loadWASM: () => _loadWASM(),
+}
 
-/**
- * Preload of wasm binary file.
- * 
- * This function can be called multiple times, but only fetch once.
- * So don't worry about repetitive calls.
- * 
- * @returns ArrayBuffer wasm binary
- */
-export const loadWASM = () => _loadWASM()
+
+
+

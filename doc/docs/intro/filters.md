@@ -11,7 +11,7 @@ But using FFmpeg command-line to build a filter link or graph can be difficult s
 Now here, we can use JavaScript way to build a graph, both flexible and easy to read.
 
 ## Example
-```JavaScript
+```js
 let video = await fflow.source('./test.avi')
 await video.trim({start: 1, duration: video.duration})
            .setVolume(0.5)

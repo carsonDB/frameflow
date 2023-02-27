@@ -21,14 +21,35 @@
         document.getElementById('transcode-canvas-button').onclick = async () => {
             const onProgress = pg => document.getElementById('transcode-canvas-progress').textContent = `${(pg*100).toFixed(2)}%`
             const video = await fflow.source('../assets/Bunny.mp4')
-            // offcanvas
-            const blob = await video.exportTo(Blob, {format: 'mp4', progress: onProgress}) 
+            const videoTrack = video.filter('video').tracks()[0]
+            const { height, width, frameRate } = videoTrack.metadata
+            const decodeStream = await videoTrack.export({ format: 'rawvideo' })
+            // OffscreenCanvas
+            const canvas = new OffscreenCanvas(width, height)
+            const ctx = canvas.getContext('2d')
+            const nextFrame = async () => {
+                const chunk = await decodeStream.next()
+                if (!chunk) return
+                ctx.drawImage(chunk.videoFrame, 0, 0)
+                ctx.fillText("FrameFlow", 10, 10) // left-top corner
+                return new VideoFrame(canvas, { timestamp: 0 })
+            }
+            const encodeStream = new ReadableStream({
+                async start(controller) {
+                    const frame = await nextFrame()
+                    if (!frame)
+                        return controller.close()
+                    controller.enqueue(frame)
+                }
+            })
+            const encodeSource = await fflow.source(encodeStream, {frameRate})
+            const blob = await encodeSource.exportTo(Blob, {format: 'mp4', progress: onProgress}) 
             document.getElementById('transcode-canvas-video').src = URL.createObjectURL(blob)
         }
     </script>
 
 
-    <h2>👉mp4 to webm (todo...slow)</h2>
+    <h2>👉mp4 to webm</h2>
     <video id="mp4-webm-video" controls></video><br />
     <button id="mp4-webm-transcode">Transcode</button>
     <span id="mp4-webm-progress"></span>

@@ -31,7 +31,7 @@ const basicConfig = {
         library: {
             name: 'frameflow',
             type: 'umd',
-            // export: 'default',
+            export: 'default',
         },
         globalObject: 'this',
         path: path.resolve(__dirname, 'dist'),

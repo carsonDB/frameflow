@@ -6,6 +6,16 @@ sidebar_position: 1
 
 # Get Started
 
+## Install
+
+### NPM
+```bash
+npm i frameflow
+```
+### HTML script
+```html
+<script src='https://unpkg.com/frameflow/dist/frameflow.min.js' ></script>
+```
 
 ## Create source
 Accept multiple type of sources, e.g. url / path / Blob / ArrayBuffer / ReadableStream.
