@@ -349,13 +349,14 @@ function buildFiltersGraph(graphInstance: FilterGraph, nodes: GraphInstance['nod
     if (graph.filterGraph && frames.length != 0) {
         const frameVec = getFFmpeg().createFrameVector()
         // graph.filterers.filter
-        frames.forEach((frame) => {
+        for (const frame of frames) {
             const metadata = graph.filterGraph?.inputs[frame.name]
             if (metadata) {
-                const format = frame.toFF(metadata.mediaType == 'video' ? metadata.pixelFormat : metadata.sampleFormat)
+                const format = await frame.toFF(metadata.mediaType == 'video' ? 
+                    metadata.pixelFormat : metadata.sampleFormat)
                 frameVec.push_back(format)
             }
-        })
+        }
         const outFrameVec = graph.filterGraph.filterer.filter(frameVec)
         vec2Array(outFrameVec).forEach(f => frames.push(new Frame(f, f.name)))
     }

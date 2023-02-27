@@ -21,7 +21,7 @@ const codecMap: {[k in string]?: string} = {
     // video codec https://www.w3.org/TR/webcodecs-codec-registry/#video-codec-registry
     av1: 'av01.0.00M.08',
     vp8: 'vp8',
-    h264: 'avc1.420034',
+    h264: "avc1.64001f",
     vp9: 'vp09.00.10.08',
     hevc: 'hev1.1.6.L93.B0',
     // audio codec https://www.w3.org/TR/webcodecs-codec-registry/#audio-codec-registry
@@ -117,7 +117,7 @@ export class Frame {
         return this.FFFrame?.pts ?? this.WebFrame?.timestamp ?? 0
     }
 
-    toFF(format: string) {
+    async toFF(format: string) {
         if (!this.FFFrame && this.WebFrame && this.WebFrame.format) {
             // default values
             const frameInfo: FrameInfo = {
@@ -136,11 +136,17 @@ export class Frame {
             }
             this.FFFrame = new (getFFmpeg()).Frame(frameInfo, this.WebFrame.timestamp ?? 0, this.#name)
             const planes = vec2Array(this.FFFrame.getPlanes())
-            planes.forEach((p, i) => 
-                this.WebFrame?.copyTo(p, {
-                    planeIndex: i, 
-                    format: formatFF2Web('sample', format) // only for audio data
-                }))
+
+            if (this.WebFrame instanceof VideoFrame)
+                // await this.WebFrame.copyTo(planes, { layout: planes.map(p => ({offset: 0, stride: 1})) })
+                throw `VideoFrame to FFFrame has not implemented.`
+            else
+                for (const [i, p] of planes.entries()) {
+                    this.WebFrame?.copyTo(p, {
+                        planeIndex: i, 
+                        format: formatFF2Web('sample', format) // only for audio data
+                    })
+                }
         }
         if (!this.FFFrame) throw `Frame.toFF() failed`
 
@@ -300,7 +306,7 @@ export class Encoder {
         if (!mediaType) throw `Encoder: streamInfo.mediaType is undefined`
         // FFmpeg
         if (this.encoder instanceof getFFmpeg().Encoder) {
-            return this.#getPackets(this.encoder.encode(frame.toFF(this.streamInfo.format)))
+            return this.#getPackets(this.encoder.encode(await frame.toFF(this.streamInfo.format)))
         }
         // WebCodecs
         const encoder = this.encoder

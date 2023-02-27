@@ -34,10 +34,13 @@
                 if (!chunk.videoFrame) {
                     throw `chunk.videoFrame is undefined`
                 }
-                ctx.drawImage(chunk.videoFrame, 0, 0)
-                chunk.videoFrame.close()
                 // simple way (maybe not precise)
-                setTimeout(renderFrame, 1/frameRate*1000)
+                // decode VideoFrame as soon as possible, and then render at next render time.
+                setTimeout(() => {
+                    ctx.drawImage(chunk.videoFrame, 0, 0)
+                    chunk.videoFrame.close()
+                    renderFrame()
+                }, 1/frameRate*1000)
             }
             await renderFrame()
         }

@@ -9,7 +9,7 @@ interface StdVector<T> {
     size(): number
     get(i: number): T
     set(i: number, T)
-    push_back(T)
+    push_back(t: T)
 }
 
 interface StdMap<T1, T2> {

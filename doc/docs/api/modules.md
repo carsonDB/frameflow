@@ -26,7 +26,7 @@ Concat multiple tracks along timeline.
 
 #### Defined in
 
-[main.ts:347](https://github.com/carsonDB/frameflow/blob/0e0f950/src/ts/main.ts#L347)
+[main.ts:374](https://github.com/carsonDB/frameflow/blob/e7b04cf/src/ts/main.ts#L374)
 
 ___
 
@@ -50,7 +50,7 @@ Track[] -> TrackGroup
 
 #### Defined in
 
-[main.ts:334](https://github.com/carsonDB/frameflow/blob/0e0f950/src/ts/main.ts#L334)
+[main.ts:361](https://github.com/carsonDB/frameflow/blob/e7b04cf/src/ts/main.ts#L361)
 
 ___
 
@@ -71,7 +71,7 @@ ArrayBuffer wasm binary
 
 #### Defined in
 
-[main.ts:358](https://github.com/carsonDB/frameflow/blob/0e0f950/src/ts/main.ts#L358)
+[main.ts:385](https://github.com/carsonDB/frameflow/blob/e7b04cf/src/ts/main.ts#L385)
 
 ___
 
@@ -93,7 +93,27 @@ Multiple audio tracks merge into one audio track.
 
 #### Defined in
 
-[main.ts:339](https://github.com/carsonDB/frameflow/blob/0e0f950/src/ts/main.ts#L339)
+[main.ts:366](https://github.com/carsonDB/frameflow/blob/e7b04cf/src/ts/main.ts#L366)
+
+___
+
+### setFlags
+
+▸ **setFlags**(`flags`): `void`
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `flags` | `Flags` |
+
+#### Returns
+
+`void`
+
+#### Defined in
+
+[main.ts:346](https://github.com/carsonDB/frameflow/blob/e7b04cf/src/ts/main.ts#L346)
 
 ___
 
@@ -118,4 +138,4 @@ SourceTrackGroup can be used further.
 
 #### Defined in
 
-[main.ts:327](https://github.com/carsonDB/frameflow/blob/0e0f950/src/ts/main.ts#L327)
+[main.ts:354](https://github.com/carsonDB/frameflow/blob/e7b04cf/src/ts/main.ts#L354)
