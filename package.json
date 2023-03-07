@@ -1,6 +1,6 @@
 {
   "name": "frameflow",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Audio/Video stream processing library for JavaScript world",
   "main": "./dist/frameflow.min.js",
   "homepage": "https://github.com/carsondb/frameflow",
