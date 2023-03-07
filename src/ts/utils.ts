@@ -11,5 +11,6 @@ export const isWebWorker =
     self.constructor &&
     self.constructor.name === "DedicatedWorkerGlobalScope";
 
-// export const ENV = isBrowser 
-
+export function Log(...msg: any[]) {
+    console.log(...msg)
+}

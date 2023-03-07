@@ -35,6 +35,10 @@ FrameInfo Frame::getFrameInfo() {
     auto format = isVideo ? 
         av_get_pix_fmt_name((AVPixelFormat)av_frame->format) : 
         av_get_sample_fmt_name((AVSampleFormat)av_frame->format);
+    // channel_layout to string
+    auto size = 256;
+    char buf[size];
+    av_get_channel_layout_string(buf, size, av_frame->channels, av_frame->channel_layout);
 
     return {
         .format = format,
@@ -42,7 +46,7 @@ FrameInfo Frame::getFrameInfo() {
         .width = av_frame->width,
         .sample_rate = av_frame->sample_rate,
         .channels = av_frame->channels,
-        .channel_layout = "", // no use
+        .channel_layout = buf,
         .nb_samples = av_frame->nb_samples
     };
 }
@@ -54,9 +58,8 @@ void Frame::audio_reinit(AVSampleFormat sample_fmt, int sample_rate, uint64_t ch
     av_frame->format         = sample_fmt;
     av_frame->sample_rate    = sample_rate;
     av_frame->nb_samples = nb_samples;
-
     auto ret = av_frame_get_buffer(av_frame, 0);
-    CHECK(ret >= 0, "Could not allocate output frame samples (error '%s')");
+    CHECK(ret >= 0, "Could not allocate output frame samples");
 }
 
 

@@ -47,6 +47,12 @@ public:
     std::string name() const { return this->_name; }
     int64_t pts() const { return av_frame->pts; }
     void set_pts(int64_t pts) { av_frame->pts = pts; }
+    static std::string inferChannelLayout(int channels) {
+        int size = 256;
+        char buf[size];
+        av_get_channel_layout_string(buf, size, channels, av_get_default_channel_layout(channels));
+        return buf;
+    }
 
     void audio_reinit(AVSampleFormat sample_fmt, int sample_rate, uint64_t channel_layout, int nb_samples);
     

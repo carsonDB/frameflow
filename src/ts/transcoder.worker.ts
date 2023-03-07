@@ -1,9 +1,9 @@
 import createModule from '../wasm/ffmpeg_built.js'
-import { Decoder, Frame, Packet, Encoder } from './codecs'
+import { Decoder, Encoder, Frame, Packet } from './codecs'
 import { WorkerHandlers } from "./message"
-import { FFmpegModule, ModuleType as FF, StdVector, StreamInfo } from './types/ffmpeg'
+import { FFmpegModule, ModuleType as FF, StdMap, StdVector, StreamInfo } from './types/ffmpeg'
 import { Flags } from './types/flags'
-import { BufferData, ChunkData, GraphInstance, SourceInstance, StreamInstanceRef, StreamMetadata, TargetInstance, WriteChunkData } from "./types/graph"
+import { BufferData, ChunkData, GraphInstance, SourceInstance, StreamMetadata, TargetInstance, WriteChunkData } from "./types/graph"
 
 
 const streamId = (nodeId: string, streamIndex: number) => `${nodeId}:${streamIndex}`
@@ -15,6 +15,12 @@ export const vec2Array = <T>(vec: StdVector<T>) => {
     }
     // vec delete ??
     return arr
+}
+const map2obj = (map: StdMap<string, string>) => {
+    const obj: {[k in string]: string} = {}
+    const keys = vec2Array(map.keys())
+    keys.forEach(k => obj[k] = map.get(k))
+    return obj
 }
 
 function streamMetadataToInfo(s: StreamMetadata): StreamInfo {
@@ -45,11 +51,7 @@ type TargetRuntime =
 
 interface GraphRuntime {
     sources: SourceRuntime[]
-    filterGraph?: {
-        inputs: {[k in string]?: StreamMetadata},
-        outputs: {[k in string]?: StreamMetadata},
-        filterer: FF['Filterer']
-    }
+    filterer?: Filterer
     targets: TargetRuntime[]
     flags: Flags
     ffmpeg?: FFmpegModule
@@ -116,7 +118,7 @@ handler.reply('nextFrame', async (_, transferArr) => {
 handler.reply('deleteGraph', () => {
     if (!graph) return
     graph.sources.forEach(source => source.reader.close())
-    graph.filterGraph?.filterer.delete()
+    graph.filterer?.close()
     graph.targets.forEach(target => target.writer.close())
 })
 
@@ -238,7 +240,7 @@ async function buildGraph(graphInstance: GraphInstance, ffmpeg: FFmpegModule) {
     }
     
     // build filter graph
-    const filterGraph = filterInstance && buildFiltersGraph(filterInstance, nodes, ffmpeg)
+    const filterer = filterInstance && buildFiltersGraph(filterInstance, nodes)
 
     // build output node
     for (const id of graphInstance.targets) {
@@ -255,8 +257,79 @@ async function buildGraph(graphInstance: GraphInstance, ffmpeg: FFmpegModule) {
     }
     
     graph.sources = sources
-    graph.filterGraph = filterGraph
+    graph.filterer = filterer
     graph.targets = targets
+}
+
+
+/**
+ * Lazy loading Filterer, create on the fly. It dynamically accept frames with types.
+ */
+class Filterer {
+    filterer?: FF['Filterer']
+    buffers: Frame[] = []
+    src2args: {[k in string]?: string} = {}
+    sink2args: {[k in string]?: string} = {}
+    mediaTypes: {[k in string]?: 'audio' | 'video'}
+    spec: string
+
+    constructor(inputs: string[], outputs: string[], mediaTypes: Filterer['mediaTypes'], spec: string) {
+        inputs.forEach(id => this.src2args[id] = '')
+        outputs.forEach(id => this.sink2args[id] = '')
+        this.mediaTypes = mediaTypes
+        this.spec = spec
+    }
+    
+    /* won't create filterer until every src2args set */
+    async filter(frames: Frame[]): Promise<Frame[]> {
+        // try to create filterer
+        if (!this.filterer) {
+            // add args to src
+            for (const f of frames) {
+                const id = f.name
+                if (this.src2args[id] !== '') continue
+                const info = f.frameInfo
+                this.src2args[id] = this.mediaTypes[id] == 'video' ? 
+                    `video_size=${info.width}x${info.height}:pix_fmt=${info.format}:time_base=1/${1e6}` : 
+                    `sample_rate=${info.sampleRate}:sample_fmt=${info.format}:channel_layout=${info.channelLayout}:time_base=1/${1e6}`
+            }
+            // check if all set and create filterer
+            if (Object.values(this.src2args).every(args => args !== '')) {
+                this.createFilterer()
+            }
+            // cache current frames, for future filter.
+            else
+                this.buffers.push(...frames.map(f => f.clone()))
+        }
+
+        // normally filter when already created filterer
+        if (this.filterer) {
+            const allFrames = this.buffers.splice(0, this.buffers.length).concat(frames)
+            const frameVec = getFFmpeg().createFrameVector()
+            for (const f of allFrames) {
+                frameVec.push_back(await f.toFF())
+            }
+            const outVec = this.filterer.filter(frameVec)
+            return vec2Array(outVec).map(f => new Frame(f, f.name))
+        }
+        else
+            return []
+    }
+    
+    createFilterer() {
+        const src2args = getFFmpeg().createStringStringMap()
+        const sink2args = getFFmpeg().createStringStringMap()
+        const mediaTypes = getFFmpeg().createStringStringMap()
+        Object.entries(this.src2args).forEach(([id, args]) => src2args.set(id, args ?? ''))
+        Object.entries(this.sink2args).forEach(([id, args]) => sink2args.set(id, args ?? ''))
+        Object.entries(this.mediaTypes).forEach(([id, type]) => {
+            if (!type) throw `createFilterer: type is undefined`
+            mediaTypes.set(id, type)
+        })
+        this.filterer = new (getFFmpeg()).Filterer(src2args, sink2args, mediaTypes, this.spec)
+    }
+
+    close() { this.filterer?.delete() }
 }
 
 
@@ -264,28 +337,7 @@ async function buildGraph(graphInstance: GraphInstance, ffmpeg: FFmpegModule) {
  * A filter is represented by a string of the form: [in_link_1]...[in_link_N]filter_name=arguments[out_link_1]...[out_link_M]
  */
 type FilterGraph = NonNullable<GraphInstance['filterInstance']>
-function buildFiltersGraph(graphInstance: FilterGraph, nodes: GraphInstance['nodes'], module: FFmpegModule): NonNullable<GraphRuntime['filterGraph']> {
-    const getStream = ({from, index}: StreamInstanceRef) => {
-        const node = nodes[from]
-        if (!node) throw `getStream: cannot find Node intance`
-        return node.outStreams[index]
-    }
-
-    const buffersrcArgs = (id: string, s: StreamMetadata, keyValSep='=', pairsSep=':') => {
-        const baseTimeBase = `1/1000000`
-        const streamInfo: {[k: string]: number | string} = s.mediaType == 'video' ? {
-            width: s.width, height: s.height, pix_fmt: s.pixelFormat, 
-            time_base: baseTimeBase,
-            pixel_aspect: `${s.sampleAspectRatio.num}/${s.sampleAspectRatio.den}`
-        } : {
-            time_base: baseTimeBase,
-            sample_rate: s.sampleRate, sample_fmt: s.sampleFormat,
-            channel_layout: s.channelLayout
-        }
-
-        return Object.entries(streamInfo).map(([k, v]) => `${k}${keyValSep}${v}`).join(pairsSep)
-    }
-    
+function buildFiltersGraph(graphInstance: FilterGraph, nodes: GraphInstance['nodes']): NonNullable<GraphRuntime['filterer']> {
     const filterSpec = graphInstance.filters.map((id) => {
         const node = nodes[id]
         if (node?.type != 'filter') return ``
@@ -305,30 +357,12 @@ function buildFiltersGraph(graphInstance: FilterGraph, nodes: GraphInstance['nod
     }).join(';')
 
     // build filter_grpah given spec
-    const inputs: {[k in string]?: StreamMetadata} = {}
-    const outputs: {[k in string]?: StreamMetadata} = {}
-    const src2args = module.createStringStringMap()
-    graphInstance.inputs.forEach(ref => {
-        const id = streamId(ref.from, ref.index)
-        src2args.set(id, buffersrcArgs(id, getStream(ref)))
-        inputs[id] = getStream(ref)
-    })
+    const inputs = graphInstance.inputs.map(ref => streamId(ref.from, ref.index))
+    const outputs = graphInstance.outputs.map(ref => streamId(ref.from, ref.index))
+    const mediaTypes = graphInstance.inputs.concat(graphInstance.outputs).map(ref => 
+        [streamId(ref.from, ref.index), nodes[ref.from]?.outStreams[ref.index].mediaType] as const)
 
-    const sink2args = module.createStringStringMap()
-    graphInstance.outputs.forEach(ref => {
-        sink2args.set(streamId(ref.from, ref.index), '')
-        const id = streamId(ref.from, ref.index)
-        outputs[id] = getStream(ref)
-    })
-    
-    // both src and sink media type
-    const mediaTypes = module.createStringStringMap()
-    graphInstance.inputs.concat(graphInstance.outputs).forEach(ref => 
-        mediaTypes.set(streamId(ref.from, ref.index), getStream(ref).mediaType))
-    
-    const filterer = new module.Filterer(src2args, sink2args, mediaTypes, filterSpec)
-
-    return {filterer, inputs, outputs}
+    return new Filterer(inputs, outputs, Object.fromEntries(mediaTypes), filterSpec)
 }
 
 
@@ -346,19 +380,8 @@ function buildFiltersGraph(graphInstance: FilterGraph, nodes: GraphInstance['nod
     const frames = await reader?.readFrames() ?? []
 
     // feed into filterer if exists
-    if (graph.filterGraph && frames.length != 0) {
-        const frameVec = getFFmpeg().createFrameVector()
-        // graph.filterers.filter
-        for (const frame of frames) {
-            const metadata = graph.filterGraph?.inputs[frame.name]
-            if (metadata) {
-                const format = await frame.toFF(metadata.mediaType == 'video' ? 
-                    metadata.pixelFormat : metadata.sampleFormat)
-                frameVec.push_back(format)
-            }
-        }
-        const outFrameVec = graph.filterGraph.filterer.filter(frameVec)
-        vec2Array(outFrameVec).forEach(f => frames.push(new Frame(f, f.name)))
+    if (graph.filterer && frames.length != 0) {
+        frames.push(...await graph.filterer.filter(frames))
     }
     // signal: no frames to write anymore 
     const endWriting = graph.sources.every(s => s.reader.inputEnd) && frames.length == 0
@@ -381,6 +404,7 @@ function buildFiltersGraph(graphInstance: FilterGraph, nodes: GraphInstance['nod
 
     return {outputs, progress, endWriting}
 }
+
 
 /**
  * pushInputs (nodeId) -> Reader -> frames (streamId) -> Writer -> pullOutputs (nodeId)
@@ -545,7 +569,7 @@ async function newVideoTargetWriter(node: TargetInstance) {
         const id = streamId(from, index)
         const info = streamMetadataToInfo(s)
         const useWebCodecs = await Encoder.isWebCodecsSupported(info)
-        const encoder = new Encoder(info, useWebCodecs)
+        const encoder = new Encoder(info, useWebCodecs, node.format.container.formatName)
         // use inStream ref
         encoders[id] = encoder
         const timeBase = s.mediaType == 'audio' ? {num: 1, den: s.sampleRate} : {num: 1, den: s.frameRate}
@@ -566,6 +590,7 @@ class VideoTargetWriter {
     muxer: FF['Muxer']
     #outputIO: OutputIO
     firstWrite = false
+    dataFilterers: {[streamId: string]: Filterer | undefined | null} = {} // null means no need
     
     constructor(
         node: TargetInstance,
@@ -590,6 +615,8 @@ class VideoTargetWriter {
             this.firstWrite = true
             this.muxer.writeHeader()
         }
+        // convert if data format is different
+        frames = await Promise.all(frames.map(f => this.dataFormatFilter(f)))
         // write frames
         for (const f of frames) {
             const streamId = f.name
@@ -600,6 +627,37 @@ class VideoTargetWriter {
                 pkt.close()
             }
         }
+    }
+
+    async dataFormatFilter(frame: Frame) {
+        const streamId = frame.name
+        if (!this.encoders[streamId]) return frame
+        // first time check if diff
+        if (this.dataFilterers[streamId] === undefined) {
+            const fmt1 = frame.frameInfo
+            const fmt2 = this.encoders[streamId].toSupportedFormat(fmt1)
+            const keys = ['format', 'channelLayout', 'sampleRate'] as const
+            const isDiff = keys.some(k => fmt1[k] && fmt2[k] && fmt1[k] != fmt2[k])
+            if (isDiff) {
+                const isVideo = fmt1.height > 0 && fmt1.width > 0
+                const spec = isVideo ? 
+                    `format=pix_fmts=${fmt2.format}` : 
+                    `aformat=sample_fmts=${fmt2.format}:sample_rates=${fmt2.sampleRate}:channel_layouts=${fmt2.channelLayout}`
+                // same streamId of input and same output
+                this.dataFilterers[streamId] = new Filterer(
+                    [streamId], [streamId], {[streamId]: isVideo ? 'video' : 'audio'}, `[${streamId}]${spec}[${streamId}]`)
+            }
+            else
+                this.dataFilterers[streamId] = null
+        }
+        // null (no need) or Filterer
+        const filterer = this.dataFilterers[streamId]
+        if (filterer) {
+            const outFrames = await filterer.filter([frame])
+            return outFrames[0]
+        }
+        else 
+            return frame
     }
 
     /* end writing (encoders flush + writeTrailer) */
@@ -639,7 +697,7 @@ class FrameTargetWriter {
     
     constructor(node: TargetInstance, streamInfo: StreamInfo, useWebCodecs: boolean) {
         this.node = node
-        this.encoder = new Encoder(streamInfo, useWebCodecs)
+        this.encoder = new Encoder(streamInfo, useWebCodecs, node.format.container.formatName)
         this.#outputIO = new OutputIO()
     }
 
@@ -657,9 +715,9 @@ class FrameTargetWriter {
         const rawVideo = this.node.outStreams[0].codecName == 'rawvideo'
         for (const f of selfFrames) {
             if (rawVideo) {
-                const webFrame = f.popWebFrame() // todo... FFFrame
-                if (webFrame)
-                    this.#outputIO.write(webFrame)
+                const frame = f.clone() // todo... FFFrame
+                if (frame.WebFrame)
+                    this.#outputIO.write(frame.WebFrame)
                 else
                     throw `Output rawvideo (bitmap) not implemented`
             }

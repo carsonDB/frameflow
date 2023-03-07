@@ -67,8 +67,7 @@ vector<Packet*> Encoder::encode(Frame* frame) {
      * need to FIFO buffer to store as many frames worth of input samples
      * that they make up at least one frame worth of output samples. 
      * */
-    // auto skipFIFO = codec_ctx->frame_size == frame->av_ptr()->nb_samples && fifo->size() == 0;
-    if (codec_ctx->codec_type == AVMEDIA_TYPE_AUDIO) {
+    if (codec_ctx->codec_type == AVMEDIA_TYPE_AUDIO && codec_ctx->frame_size > 0) {
         if (frame != NULL)
             fifo->push(frame);
         /* Read as many samples from the FIFO buffer as required to fill the frame.*/

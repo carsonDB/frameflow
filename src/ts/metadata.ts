@@ -1,9 +1,12 @@
 import { StreamMetadata } from "./types/graph";
 
 
-const dataFormatMap: 
-    { pixel: {ff: string, web: VideoPixelFormat}[], 
-      sample: {ff: string, web: AudioSampleFormat}[] } = 
+interface DataFormatMap {
+    pixel: {ff: string, web: VideoPixelFormat}[] 
+    sample: {ff: string, web: AudioSampleFormat}[]
+}
+
+export const dataFormatMap: DataFormatMap = 
 {
     pixel: [
         {ff: 'yuv420p', web: 'I420'},

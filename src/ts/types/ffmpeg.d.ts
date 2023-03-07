@@ -19,6 +19,11 @@ interface StdMap<T1, T2> {
     set(key: T1, val: T2)
 }
 
+class CppClass {
+    delete(): void
+    clone(): this
+}
+
 // demuxer
 interface ReaderForDemuxer {
     size: number
@@ -27,7 +32,7 @@ interface ReaderForDemuxer {
     read: (buffer: Uint8Array) => Promise<number>
     seek: (pos: number) => Promise<void>
 }
-class Demuxer {
+class Demuxer extends CppClass {
     constructor()
     build(reader: ReaderForDemuxer): Promise<void>
     seek(t: number, streamIndex: number): Promise<void>
@@ -36,7 +41,6 @@ class Demuxer {
     getMetadata(): FormatInfo
     currentTime(streamIndex: number): number
     dump(): void
-    delete(): void
 }
 interface FormatInfo {
     formatName: string
@@ -46,7 +50,7 @@ interface FormatInfo {
 }
 
 // decode
-class Decoder {
+class Decoder extends CppClass {
     constructor(dexmuer: Demuxer, streamIndex: number, name: string)
     constructor(streamInfo: StreamInfo, name: string)
     name: number
@@ -54,11 +58,10 @@ class Decoder {
     get dataFormat(): DataFormat
     decode(packet: Packet): StdVector<Frame>
     flush(): StdVector<Frame>
-    delete(): void
 }
 
 // stream
-class Stream {
+class Stream extends CppClass {
 }
 
 interface StreamInfo {
@@ -85,15 +88,15 @@ interface StreamInfo {
 interface DataFormat {
     format: string // pixel_fmt / sample_fmt
     channels: number
-    channel_layout: string
-    sample_rate: number
+    channelLayout: string
+    sampleRate: number
 }
 
 // packet
 interface TimeInfo {
     pts: number, dts: number, duration: number
 }
-class Packet {
+class Packet extends CppClass {
     constructor()
     constructor(bufSize: number, timeInfo: TimeInfo)
     size: number
@@ -102,7 +105,6 @@ class Packet {
     getData(): Uint8Array
     getTimeInfo(): TimeInfo
     dump():void
-    delete(): void
 }
 
 // frame
@@ -116,26 +118,26 @@ interface FrameInfo {
     nbSamples: number;
 }
 
-class Frame {
+class Frame extends CppClass {
     constructor(info: FrameInfo, pts: number, name: string);
     getFrameInfo(): FrameInfo
+    static inferChannelLayout(channels: number): string
     getPlanes(): StdVector<Uint8Array>
     key: boolean
     pts: number
     dump():void
-    delete(): void
     name: string
 }
 
 // filter
-class Filterer {
+class Filterer extends CppClass {
     constructor(inStreams: StdMap<string, string>, outStreams: StdMap<string, string>, mediaTypes: StdMap<string, string>, graphSpec: string)
     filter(frames: StdVector<Frame>): StdVector<Frame>
     delete(): void
 }
 
 // encode
-class Encoder {
+class Encoder extends CppClass {
     constructor(params: StreamInfo)
     get timeBase(): AVRational
     get dataFormat(): DataFormat
@@ -162,7 +164,7 @@ interface WriterForMuxer {
 }
 
 // muxer
-class Muxer {
+class Muxer extends CppClass {
     constructor(formatName: string, writer: WriterForMuxer)
     static inferFormatInfo(format: string, filename: string): InferredFormatInfo
     dump(): void

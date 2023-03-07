@@ -60,7 +60,7 @@ async function createSource(source: SourceType, args?: SourceArgs) {
             return srcTracks
         }
         else
-            throw `Only stream imgae/samples are allowed`
+            throw `Only stream image/samples are allowed`
     }
 }
 
@@ -94,7 +94,8 @@ class TrackGroup {
     trim(args: FilterArgs<'trim'>) { 
         return new FilterTrackGroup({type: 'trim', args}, this.streams) 
     }
-    loop(args: FilterArgs<'loop'>) { return new FilterTrackGroup({ type: 'loop', args }, this.streams) }
+    // loop(args: FilterArgs<'loop'>) { return new FilterTrackGroup({ type: 'loop', args }, this.streams) }
+    loop(args: number) { return new FilterTrackGroup({ type: 'concat' }, null, Array(args).fill(this.streams) ) }
     setVolume(args: FilterArgs<'volume'>) { 
         return new FilterTrackGroup({ type: 'volume', args}, this.streams) 
     }
@@ -110,10 +111,10 @@ class TrackGroup {
     /**
      * @param filename target filename (currently only in Node.js)
      */
-    exportTo(dest: string): Promise<void>
-    exportTo(dest: typeof ArrayBuffer): Promise<BufferData>
-    exportTo(dest: typeof Blob): Promise<Blob>
-    exportTo(dest: HTMLVideoElement): Promise<void>
+    exportTo(dest: string, args?: ExportArgs): Promise<void>
+    exportTo(dest: typeof ArrayBuffer, args?: ExportArgs): Promise<BufferData>
+    exportTo(dest: typeof Blob, args?: ExportArgs): Promise<Blob>
+    exportTo(dest: HTMLVideoElement, args?: ExportArgs): Promise<void>
     async exportTo(
         dest: string | typeof ArrayBuffer | typeof Blob | HTMLVideoElement, 
         args?: ExportArgs
@@ -324,9 +325,9 @@ async function createTargetNode(inStreams: StreamRef[], args: ExportArgs, worker
     const outStreams = inStreams.map(s => {
         const stream = s.from.outStreams[s.index]
         if (stream.mediaType == 'audio') 
-            return {...stream, codecName: audio.codecName, sampleFormat: audio.format}
+            return {...stream, codecName: audio.codecName}
         else if (stream.mediaType == 'video') 
-            return {...stream, codecName: video.codecName, pixelFormat: video.format}
+            return {...stream, codecName: video.codecName}
         return stream
     })
 

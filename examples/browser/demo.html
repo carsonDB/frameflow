@@ -81,4 +81,42 @@
         }
     </script>
 
+    <h2>👉MediaRecoder to wav file</h2>
+    <audio id="mediaRecorder-wav-audio" controls></audio><br />
+    <button id="mediaRecorder-wav-button">Record</button>
+    <button id="mediaRecorder-wav-stop">stop</button>
+    <script>
+        document.getElementById('mediaRecorder-wav-button').onclick = async () => {
+            const stream = await navigator.mediaDevices.getUserMedia({audio: true})
+            const recorder = new MediaRecorder(stream)
+            const chunks = []
+            recorder.ondataavailable = e => chunks.push(e.data)
+            document.getElementById('mediaRecorder-wav-stop').onclick = () => recorder.stop()
+            recorder.onstop = async () => {
+                const blob = new Blob(chunks)
+                const src = await fflow.source(blob)
+                const wavBlob = await src.exportTo(Blob, {format: 'wav'})
+                console.log(wavBlob)
+                document.getElementById('mediaRecorder-wav-audio').src = URL.createObjectURL(wavBlob)
+            }
+
+            recorder.start()
+        }
+    </script>
+
+    <h2>👉Audio: trim + loop + concat</h2>
+    <audio id="trim-loop-concat-audio" controls></audio><br />
+    <button id="trim-loop-concat-button">Concat</button>
+    <script>
+        document.getElementById('trim-loop-concat-button').onclick = async () => {
+            const audio = await fflow.source('../assets/audio.mp3')
+            const sample1 = audio.trim({start: 20, duration: 5}).loop(2)
+            const sample2 = audio.trim({start: 2, duration: 4}).loop(3)
+            const concatAudio = fflow.concat([sample1, sample2])
+            const blob = await concatAudio.exportTo(Blob, {format: 'wav'}) 
+            document.getElementById('trim-loop-concat-audio').src = URL.createObjectURL(blob)
+        }
+    </script>
+
+
 </body>

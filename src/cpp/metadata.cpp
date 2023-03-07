@@ -121,10 +121,10 @@ DataFormat createDataFormat(AVCodecContext* ctx) {
         df.format = av_get_pix_fmt_name(ctx->pix_fmt);
     }
     else if (ctx->codec_type == AVMEDIA_TYPE_AUDIO) {
-        df.sample_rate = ctx->sample_rate;
+        df.sampleRate = ctx->sample_rate;
         df.channels = ctx->channels;
         df.format = av_get_sample_fmt_name(ctx->sample_fmt);
-        df.channel_layout = get_channel_layout_name(ctx->channels, ctx->channel_layout);
+        df.channelLayout = get_channel_layout_name(ctx->channels, ctx->channel_layout);
     }
 
     return df;

@@ -4,7 +4,7 @@ export type FilterArgs<T extends Filter['type']> = Extract<Filter, { type: T, ar
 export type Filter = 
 { type: 'tracks', args: 'video' | 'audio' } |
 { type: 'trim', args: { start: number, duration: number } } |
-{ type: 'loop', args: number } |
+// { type: 'loop', args: number } |
 { type: 'volume', args: number } |
 { type: 'merge' } | // implicit args: {number of inputs}
 { type: 'concat' } |
@@ -34,15 +34,16 @@ export function applySingleFilter(streamRefs: StreamRef[], filter: Filter): Stre
                     inStreams: [{from: trimNode, index: 0}], outStreams: trimNode.outStreams }
                 return {from, index: 0}
             }
-            case 'loop': {
-                const loop = filter.args
-                const name = s.mediaType == 'audio' ? 'aloop' : 'loop'
-                const from: FilterNode = {
-                    type: 'filter', filter: {name, ffmpegArgs: {loop}},
-                    inStreams: [streamRef], outStreams: [{...s, duration: loop*s.duration}]
-                }
-                return {from, index: 0}
-            }
+            // case 'loop': {
+                // const loop = filter.args
+                // const name = s.mediaType == 'audio' ? 'aloop' : 'loop'
+                // const from: FilterNode = {
+                //     type: 'filter', filter: {name, ffmpegArgs: {loop, size: 20}},
+                //     inStreams: [streamRef], outStreams: [{...s, duration: loop*s.duration}]
+                // }
+                // return {from, index: 0}
+
+            // }
             case 'volume': {
                 const volume = filter.args
                 if (s.mediaType == 'video') return streamRef
@@ -93,6 +94,16 @@ export function applyMulitpleFilter(streamRefsArr: StreamRef[][], filter: Filter
             // todo... check more
             if (streamRefsArr.some(refs => refs.length != streamRefsArr[0].length))
                 throw `${filter.type}: all segments should have same audio/video tracks`
+            // // fifo (allow same input multiple times)
+            // streamRefsArr = streamRefsArr.map(segment => segment.map<StreamRef>(ref => {
+            //     const stream = ref.from.outStreams[ref.index]
+            //     const name = stream.mediaType == 'video' ? 'fifo' : 'afifo'
+            //     const from: FilterNode = {type: 'filter', inStreams: [ref],
+            //         outStreams: [stream], 
+            //         filter: {name, ffmpegArgs: ''} }
+            //     return {from, index: 0}
+            // }))
+            // concat
             const duration = streamRefsArr.reduce((acc, refs) => acc + refs[0].from.outStreams[refs[0].index].duration, 0)
             const from: FilterNode = {type: 'filter', inStreams: streamRefsArr.flat(),
                 outStreams: streamRefsArr[0].map(r => ({...r.from.outStreams[r.index], duration})), 

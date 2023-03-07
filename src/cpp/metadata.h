@@ -50,9 +50,9 @@ void set_avcodec_context_from_streamInfo(StreamInfo& info, AVCodecContext* ctx);
 
 struct DataFormat {
     string format; // AVSampleFormat / AVPixelFormat
-    string channel_layout;
+    string channelLayout;
     int channels;
-    int sample_rate; 
+    int sampleRate; 
 };
 
 DataFormat createDataFormat(AVCodecContext* ctx);

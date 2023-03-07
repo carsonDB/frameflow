@@ -35,9 +35,9 @@ EMSCRIPTEN_BINDINGS(metadata) {
 
     value_object<DataFormat>("DataFormat")
         .field("format", &DataFormat::format)
-        .field("channel_layout", &DataFormat::channel_layout)
+        .field("channelLayout", &DataFormat::channelLayout)
         .field("channels", &DataFormat::channels)
-        .field("sample_rate", &DataFormat::sample_rate)
+        .field("sampleRate", &DataFormat::sampleRate)
     ;
 
     value_object<FormatInfo>("FormatInfo")
@@ -108,6 +108,7 @@ EMSCRIPTEN_BINDINGS(frame) {
     class_<Frame>("Frame")
         .constructor<FrameInfo, double, std::string>()
         .function("getFrameInfo", &Frame::getFrameInfo)
+        .class_function("inferChannelLayout", &Frame::inferChannelLayout)
         .property("key", &Frame::key)
         .property("pts", &Frame::doublePTS)
         .property("name", &Frame::name)
@@ -171,6 +172,7 @@ EMSCRIPTEN_BINDINGS(utils) {
 	register_vector<Packet*>("vector<Packet>");
     register_vector<emscripten::val>("vector<val>");
 	register_vector<StreamInfo>("vector<StreamInfo>");
+    register_vector<std::string>("vector<string>"); // map.keys()
     register_map<std::string, std::string>("MapStringString");
 
     emscripten::function("setConsoleLogger", &setConsoleLogger);

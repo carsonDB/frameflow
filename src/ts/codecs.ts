@@ -3,9 +3,10 @@
  * All packet/frame assume time_base={num: 1, den: 1e6}
  * TODO...
  */
-import { formatFF2Web, formatWeb2FF } from './metadata'
+import { dataFormatMap, formatFF2Web, formatWeb2FF } from './metadata'
 import { getFFmpeg, vec2Array } from './transcoder.worker'
-import { ModuleType as FF, FrameInfo, StreamInfo, StdVector } from './types/ffmpeg'
+import { ModuleType as FF, FrameInfo, StreamInfo, StdVector, DataFormat } from './types/ffmpeg'
+import { Log } from './utils'
 
 
 type WebPacket = EncodedVideoChunk | EncodedAudioChunk
@@ -21,7 +22,7 @@ const codecMap: {[k in string]?: string} = {
     // video codec https://www.w3.org/TR/webcodecs-codec-registry/#video-codec-registry
     av1: 'av01.0.00M.08',
     vp8: 'vp8',
-    h264: "avc1.64001f",
+    h264: "avc1.424034",
     vp9: 'vp09.00.10.08',
     hevc: 'hev1.1.6.L93.B0',
     // audio codec https://www.w3.org/TR/webcodecs-codec-registry/#audio-codec-registry
@@ -101,7 +102,7 @@ export class Frame {
     FFFrame?: FF['Frame']
     WebFrame?: WebFrame
     #name: string
-    constructor(frame: FF['Frame'] | WebFrame, name: string) {
+    constructor(frame: FF['Frame'] | WebFrame | undefined, name: string) {
         this.#name = name
         if (frame instanceof getFFmpeg().Frame) {
             this.FFFrame = frame
@@ -117,7 +118,34 @@ export class Frame {
         return this.FFFrame?.pts ?? this.WebFrame?.timestamp ?? 0
     }
 
-    async toFF(format: string) {
+    get frameInfo() {
+        if (this.FFFrame) {
+            return this.FFFrame.getFrameInfo()
+        }
+        else if (this.WebFrame instanceof VideoFrame && this.WebFrame.format) {
+            return {
+                format: formatWeb2FF('pixel', this.WebFrame.format), 
+                height: this.WebFrame.codedHeight,
+                width: this.WebFrame.codedWidth,
+                sampleRate: 0,
+                channels: 0,
+                channelLayout: ''
+            }
+        }
+        else if (this.WebFrame instanceof AudioData) {
+            return {
+                format: formatWeb2FF('sample', this.WebFrame.format), 
+                channels: this.WebFrame.numberOfChannels,
+                channelLayout: getFFmpeg().Frame.inferChannelLayout(this.WebFrame.numberOfChannels),
+                sampleRate: this.WebFrame.sampleRate,
+                height: 0,
+                width: 0,
+            }
+        }
+        throw `Frame get dataFormat failed`
+    }
+
+    async toFF() {
         if (!this.FFFrame && this.WebFrame && this.WebFrame.format) {
             // default values
             const frameInfo: FrameInfo = {
@@ -125,27 +153,23 @@ export class Frame {
 
             if (this.WebFrame instanceof VideoFrame) {
                 frameInfo.format = formatWeb2FF('pixel', this.WebFrame.format) // todo...
-                frameInfo.height =this.WebFrame.codedHeight
+                frameInfo.height = this.WebFrame.codedHeight
                 frameInfo.width = this.WebFrame.codedWidth
             }
             else {
-                frameInfo.format = format // required FF format
+                frameInfo.format = formatWeb2FF('sample', this.WebFrame.format) // required FF format
                 frameInfo.channels = this.WebFrame.numberOfChannels
                 frameInfo.sampleRate = this.WebFrame.sampleRate
                 frameInfo.nbSamples = this.WebFrame.numberOfFrames
             }
             this.FFFrame = new (getFFmpeg()).Frame(frameInfo, this.WebFrame.timestamp ?? 0, this.#name)
             const planes = vec2Array(this.FFFrame.getPlanes())
-
             if (this.WebFrame instanceof VideoFrame)
                 // await this.WebFrame.copyTo(planes, { layout: planes.map(p => ({offset: 0, stride: 1})) })
                 throw `VideoFrame to FFFrame has not implemented.`
             else
                 for (const [i, p] of planes.entries()) {
-                    this.WebFrame?.copyTo(p, {
-                        planeIndex: i, 
-                        format: formatFF2Web('sample', format) // only for audio data
-                    })
+                    this.WebFrame?.copyTo(p, { planeIndex: i })
                 }
         }
         if (!this.FFFrame) throw `Frame.toFF() failed`
@@ -192,10 +216,11 @@ export class Frame {
         return this.WebFrame
     }
 
-    popWebFrame() {
-        const frame = this.WebFrame
-        this.WebFrame = undefined
-        return frame
+    clone() {
+        const cloned = new Frame(undefined, this.#name)
+        cloned.FFFrame = this.FFFrame?.clone()
+        cloned.WebFrame = this.WebFrame?.clone()
+        return cloned
     }
 
     close() {
@@ -225,6 +250,7 @@ const audioEncoderConfig = (streamInfo: StreamInfo): AudioEncoderConfig => ({
     sampleRate: streamInfo.sampleRate,
 })
 
+
 export class Encoder {
     encoder: FF['Encoder'] | WebEncoder
     streamInfo: StreamInfo
@@ -234,9 +260,8 @@ export class Encoder {
     /**
      * @param useWebCodecs check `Encoder.isWebCodecsSupported` before contructor if `true`
      */
-    constructor(streamInfo: StreamInfo, useWebCodecs: boolean) {
+    constructor(streamInfo: StreamInfo, useWebCodecs: boolean, muxFormat: string) {
         this.streamInfo = streamInfo
-
         if (useWebCodecs) {
             if (streamInfo.mediaType == 'video') {
                 this.encoder = new VideoEncoder({
@@ -252,9 +277,12 @@ export class Encoder {
                 })
                 this.encoder.configure(audioEncoderConfig(streamInfo))
             }
+            Log('WebCodecs:', this.encoder.constructor.name)
         }
         else {
-            this.encoder = new (getFFmpeg()).Encoder(streamInfo)
+            const info = getFFmpeg().Muxer.inferFormatInfo(muxFormat, '')
+            const newStreamInfo = {...streamInfo, ...info[streamInfo.mediaType ?? 'audio']}
+            this.encoder = new (getFFmpeg()).Encoder(newStreamInfo)
         }
     }
 
@@ -284,6 +312,20 @@ export class Encoder {
         return false
     }
 
+    toSupportedFormat(dataFormat: DataFormat) {
+        if (this.encoder instanceof VideoEncoder) {
+            const match = dataFormatMap.pixel.find(({ff}) => dataFormat.format == ff)
+            return match ? dataFormat : {...dataFormat, format: dataFormatMap.pixel[0].ff}
+        }
+        else if (this.encoder instanceof AudioEncoder) {
+            const match = dataFormatMap.sample.find(({ff}) => dataFormat.format == ff)
+            return match ? dataFormat : {...dataFormat, format: dataFormatMap.sample[0].ff}
+        }
+        else {
+            return this.encoder.dataFormat
+        }
+    }
+
     get FFEncoder() {
         return this.encoder instanceof getFFmpeg().Encoder ? this.encoder : undefined
     }
@@ -306,7 +348,7 @@ export class Encoder {
         if (!mediaType) throw `Encoder: streamInfo.mediaType is undefined`
         // FFmpeg
         if (this.encoder instanceof getFFmpeg().Encoder) {
-            return this.#getPackets(this.encoder.encode(await frame.toFF(this.streamInfo.format)))
+            return this.#getPackets(this.encoder.encode(await frame.toFF()))
         }
         // WebCodecs
         const encoder = this.encoder
@@ -360,7 +402,7 @@ const audioDecoderConfig = (streamInfo: StreamInfo): AudioDecoderConfig => ({
     codec: codecMap[streamInfo.codecName]??'',
     numberOfChannels: streamInfo.channels,
     sampleRate: streamInfo.sampleRate,
-    description: streamInfo.extraData,
+    // description: streamInfo.extraData, // MediaRecorder -> blob decode (don't add)
 })
 
 export class Decoder {
@@ -393,6 +435,7 @@ export class Decoder {
                 decoder.configure(audioDecoderConfig(streamInfo))
                 this.decoder = decoder
             }
+            Log('WebCodecs:', this.decoder.constructor.name)
         }
         else {
             this.decoder = demuxer ?

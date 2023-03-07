@@ -9,7 +9,7 @@ Learn more about [why frameflow](https://frameflow.netlify.app/blog/why-frameflo
 ## Features
 - Process video in stream way, without video size limitation.
 - Accept stream input `MediaStream` (from canvas, Camera, ...), and output stream of frames (to canvas...) as well.
-- Use `WebCodecs` to have hardware acceleration for Chromium-based client (Chrome, Edge, Opera, Electron...).
+- Use `WebCodecs` to have hardware acceleration for Chromium-based client (Chrome (>=106), Edge, Opera, Electron...).
 - Get detailed metadata of video file by reading only several chunks, either from local disk or remote url.
 - Processing speed can be controlled either automatically or manually.
 
