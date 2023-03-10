@@ -7,7 +7,7 @@ const darkCodeTheme = require('prism-react-renderer/themes/dracula');
 /** @type {import('@docusaurus/types').Config} */
 const config = {
   title: 'FrameFlow',
-  tagline: 'Media stream processing library for JavaScript world',
+  tagline: 'Both speedy and compatible video process library for Web Browser',
   // favicon: 'img/favicon.ico',
 
   // Set the production url of your site here
