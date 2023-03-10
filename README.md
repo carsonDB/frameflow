@@ -2,19 +2,16 @@
 
 [![Join Discord group](https://img.shields.io/badge/Discord-Join-blue?logo=discord&logoColor=white)](https://discord.gg/H698RFd8we)
 
-An audio/video **stream** processing library for JavaScript world, based on FFmpeg (WebAssembly) and WebCodecs.
-It directly uses low-level C API from libav* folders in FFmepg, wrapped with C++ and compiled as WebAssembly module. In other words, reimplements the I/O and control logic, to really fit into JavaScript world.
-Learn more about [why frameflow](https://frameflow.netlify.app/blog/why-frameflow).
+A both speedy and compatible video processing library for Web Browser, based on WebCodecs and FFmpeg (WebAssembly). It is hardware accelerated by WebCodecs as default, which works in Chromium-based clients (Chrome, Edge, Electron...). And also provides fallback solutions by FFmpeg (WebAssembly). It also provides some usual filters (trim, concat...).
 
 ## Features
-- Process video in stream way, without video size limitation.
+- Process videos in stream way, without video size limitation.
 - Accept stream input `MediaStream` (from canvas, Camera, ...), and output stream of frames (to canvas...) as well.
 - Use `WebCodecs` to have hardware acceleration for Chromium-based client (Chrome (>=106), Edge, Opera, Electron...).
 - Get detailed metadata of video file by reading only several chunks, either from local disk or remote url.
 - Processing speed can be controlled either automatically or manually.
 
 ⚠️ Note: **web browser** examples are tested. Nodejs hasn't been tested yet.
-There are many places that need to optimize. You words will shape the future of FrameFlow.
 
 ## Demo
 
