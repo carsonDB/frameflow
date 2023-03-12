@@ -282,6 +282,8 @@ class Filterer {
     
     /* won't create filterer until every src2args set */
     async filter(frames: Frame[]): Promise<Frame[]> {
+        // only input rquired frames
+        frames = frames.filter(f => typeof this.src2args[f.name] == 'string')
         // try to create filterer
         if (!this.filterer) {
             // add args to src

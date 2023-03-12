@@ -6,14 +6,6 @@ inline double toSeconds(int64_t time_ts, AVRational& time_base) {
         time_ts * (double)time_base.num / time_base.den : 0;
 }
 
-/* get description of channel_layout */
-inline string get_channel_layout_name(int channels, uint64_t channel_layout) {
-    int buf_size = 256;
-    char buf[buf_size];
-    av_get_channel_layout_string(buf, buf_size, channels, channel_layout);
-    return buf;
-}
-
 StreamInfo createStreamInfo(AVFormatContext* format_ctx, AVStream* s) {
     StreamInfo info;
     info.index = s->index;

@@ -1,7 +1,5 @@
 # [FrameFlow](https://frameflow.netlify.app/)
 
-[![Join Discord group](https://img.shields.io/badge/Discord-Join-blue?logo=discord&logoColor=white)](https://discord.gg/H698RFd8we)
-
 A both speedy and compatible video processing library for Web Browser, based on WebCodecs and FFmpeg (WebAssembly). It is hardware accelerated by WebCodecs as default, which works in Chromium-based clients (Chrome, Edge, Electron...). And also provides fallback solutions by FFmpeg (WebAssembly). It also provides some usual filters (trim, concat...).
 
 ## Features

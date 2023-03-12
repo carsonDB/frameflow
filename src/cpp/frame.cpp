@@ -35,10 +35,6 @@ FrameInfo Frame::getFrameInfo() {
     auto format = isVideo ? 
         av_get_pix_fmt_name((AVPixelFormat)av_frame->format) : 
         av_get_sample_fmt_name((AVSampleFormat)av_frame->format);
-    // channel_layout to string
-    auto size = 256;
-    char buf[size];
-    av_get_channel_layout_string(buf, size, av_frame->channels, av_frame->channel_layout);
 
     return {
         .format = format,
@@ -46,7 +42,7 @@ FrameInfo Frame::getFrameInfo() {
         .width = av_frame->width,
         .sample_rate = av_frame->sample_rate,
         .channels = av_frame->channels,
-        .channel_layout = buf,
+        .channel_layout = get_channel_layout_name(av_frame->channels, av_frame->channel_layout),
         .nb_samples = av_frame->nb_samples
     };
 }
@@ -65,8 +61,10 @@ void Frame::audio_reinit(AVSampleFormat sample_fmt, int sample_rate, uint64_t ch
 
 void AudioFrameFIFO::push(Frame* in_frame) {
     auto num_sample = in_frame->av_ptr()->nb_samples;
+    auto fifo_size = this->size() + num_sample;
+    if (fifo_size <= 0) return;
     /* Make the FIFO as large as it needs to be to hold both, the old and the new samples. */
-    auto ret = av_audio_fifo_realloc(fifo, this->size() + num_sample);
+    auto ret = av_audio_fifo_realloc(fifo, fifo_size);
     CHECK(ret >= 0, "Could not reallocate FIFO");
     /* Store the new samples in the FIFO buffer. */
     auto num_writes = av_audio_fifo_write(fifo, (void **)in_frame->av_ptr()->data, num_sample);

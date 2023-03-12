@@ -256,6 +256,7 @@ export class Encoder {
     streamInfo: StreamInfo
     outputs: WebPacket[] = []
     #dts = 0
+    #frameCount = 0
 
     /**
      * @param useWebCodecs check `Encoder.isWebCodecsSupported` before contructor if `true`
@@ -346,6 +347,7 @@ export class Encoder {
     async encode(frame: Frame): Promise<Packet[]> {
         const mediaType = this.streamInfo.mediaType
         if (!mediaType) throw `Encoder: streamInfo.mediaType is undefined`
+        this.#frameCount++
         // FFmpeg
         if (this.encoder instanceof getFFmpeg().Encoder) {
             return this.#getPackets(this.encoder.encode(await frame.toFF()))
@@ -361,7 +363,7 @@ export class Encoder {
             })
         const webFrame = frame.toWeb(this.streamInfo.frameRate)
         if (this.encoder instanceof VideoEncoder && webFrame instanceof VideoFrame) {
-            this.encoder.encode(webFrame)
+            this.encoder.encode(webFrame, { keyFrame: (this.#frameCount - 1) % 12 == 0 })
             return dequeuePromise()
         }
         else if (this.encoder instanceof AudioEncoder && webFrame instanceof AudioData) {

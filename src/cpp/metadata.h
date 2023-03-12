@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 #include <cmath>
+#include "utils.h"
 
 extern "C" {
     #include <libavformat/avformat.h>

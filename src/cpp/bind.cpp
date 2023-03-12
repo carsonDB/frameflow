@@ -2,6 +2,7 @@
 #define BIND_H
 
 #include <emscripten/bind.h>
+#include "utils.h"
 #include "metadata.h"
 #include "stream.h"
 #include "encode.h"
@@ -9,7 +10,6 @@
 #include "decode.h"
 #include "filter.h"
 #include "muxer.h"
-#include "utils.h"
 using namespace emscripten;
 
 

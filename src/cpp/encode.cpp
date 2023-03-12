@@ -20,9 +20,6 @@ Encoder::Encoder(StreamInfo info) {
     set_avcodec_context_from_streamInfo(info, codec_ctx);
     /* Allow the use of the experimental encoder. */
     codec_ctx->strict_std_compliance = FF_COMPLIANCE_EXPERIMENTAL;
-    // todo... remove
-    // if (codec->id == AV_CODEC_ID_H264)
-    //     av_opt_set(codec_ctx->priv_data, "preset", "slow", 0);
     auto ret = avcodec_open2(codec_ctx, codec, NULL);
     CHECK(ret == 0, "could not open codec");
     // create fifo for audio (after codec_ctx init)

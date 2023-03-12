@@ -27,3 +27,13 @@ void setConsoleLogger(bool verbose) {
     av_log_set_callback(log_callback);
 }
 
+
+
+string get_channel_layout_name(int channels, uint64_t channel_layout) {
+    if (!channel_layout)
+        channel_layout = (uint64_t)av_get_default_channel_layout(channels);
+    int buf_size = 256;
+    char buf[buf_size];
+    av_get_channel_layout_string(buf, buf_size, channels, channel_layout);
+    return buf;
+}

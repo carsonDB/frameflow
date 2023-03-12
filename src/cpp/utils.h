@@ -8,6 +8,7 @@
 #include <map>
 extern "C" {
     #include <libavutil/log.h>
+    #include <libavutil/channel_layout.h>
 }
 using namespace std;
 
@@ -26,5 +27,8 @@ map<T1, T2> createMap() {
 /* set custom (console) Logger */
 void setConsoleLogger(bool verbose);
 
+
+/* get description of channel_layout */
+string get_channel_layout_name(int channels, uint64_t channel_layout);
 
 #endif

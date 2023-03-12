@@ -12,16 +12,16 @@
         window.onload = () => window.fflow = frameflow
     </script>
 
-    <h2>👉mp4 to webm</h2>
-    <video id="mp4-webm-video" controls></video><br />
-    <button id="mp4-webm-transcode">Transcode</button>
-    <span id="mp4-webm-progress"></span>
+    <h2>👉mp4 to mp4</h2>
+    <video id="mp4-mp4-video" controls></video><br />
+    <button id="mp4-mp4-transcode">Transcode</button>
+    <span id="mp4-mp4-progress"></span>
     <script>
-        document.getElementById('mp4-webm-transcode').onclick = async () => {
-            const onProgress = pg => document.getElementById('mp4-webm-progress').textContent = `${(pg*100).toFixed(2)}%`
+        document.getElementById('mp4-mp4-transcode').onclick = async () => {
+            const onProgress = pg => document.getElementById('mp4-mp4-progress').textContent = `${(pg*100).toFixed(2)}%`
             const video = await fflow.source('../assets/Bunny.mp4')
-            const blob = await video.exportTo(Blob, {format: 'webm', progress: onProgress}) 
-            document.getElementById('mp4-webm-video').src = URL.createObjectURL(blob)
+            const blob = await video.filter('video').exportTo(Blob, {format: 'mp4', progress: onProgress}) 
+            document.getElementById('mp4-mp4-video').src = URL.createObjectURL(blob)
         }
     </script>
 
@@ -41,13 +41,8 @@
             console.log(vidSrc.metadata)
             const output = vidSrc
 
-            const target = await output.export({format: 'webm', progress: onProgress})
-            let size = 0
-            for await (let chunk of target) {
-                size += chunk.data.byteLength
-                console.log(chunk.data.byteLength)
-                if (size > 320) break
-            }
+            const blob = await output.exportTo(Blob, {format: 'mp4', progress: onProgress})
+            document.getElementById('test-video').src = URL.createObjectURL(blob)
             
             // const blob = await output.exportTo(Blob, {format: 'mp4', progress: onProgress})
             // const link = document.createElement('a')
