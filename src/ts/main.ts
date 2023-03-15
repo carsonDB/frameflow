@@ -92,7 +92,8 @@ class TrackGroup {
 
     // group filters
     trim(args: FilterArgs<'trim'>) { 
-        return new FilterTrackGroup({type: 'trim', args}, this.streams) 
+        const trimmed = applySingleFilter(this.streams, {type: 'trim', args}) 
+        return new FilterTrackGroup({type: 'setpts'}, trimmed)
     }
     // loop(args: FilterArgs<'loop'>) { return new FilterTrackGroup({ type: 'loop', args }, this.streams) }
     loop(args: number) { return new FilterTrackGroup({ type: 'concat' }, null, Array(args).fill(this.streams) ) }
@@ -371,8 +372,9 @@ export default {
      * @param trackArr 
      * @returns 
      */
-    concat: (trackArr: (TrackGroup | Track)[]) => 
-        new FilterTrackGroup({ type: 'concat' }, null, trackArr.map(t => t.streams)),
+    concat: (trackArr: (TrackGroup | Track)[]) => {
+        return new FilterTrackGroup({ type: 'concat' }, null, trackArr.map(t => t.streams))
+    },
 
     /**
      * Preload of wasm binary file.

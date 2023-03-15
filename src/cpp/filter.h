@@ -51,6 +51,7 @@ public:
      */
     Filterer(map<string, string> inParams, map<string, string> outParams, map<string, string> mediaTypes, string filterSpec);
     vector<Frame*> filter(vector<Frame*>);
+    vector<Frame*> flush();
 };
 
 

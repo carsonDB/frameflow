@@ -318,6 +318,10 @@ class Filterer {
             return []
     }
     
+    flush() {
+        return this.filterer ? vec2Array(this.filterer.flush()).map(f => new Frame(f, f.name)) : []
+    }
+
     createFilterer() {
         const src2args = getFFmpeg().createStringStringMap()
         const sink2args = getFFmpeg().createStringStringMap()
@@ -380,13 +384,15 @@ function buildFiltersGraph(graphInstance: FilterGraph, nodes: GraphInstance['nod
     }, {reader: null as SourceReader | null, currentTime: Infinity})
     // read frames from sources
     const frames = await reader?.readFrames() ?? []
+    const sourcesEnd = graph.sources.every(s => s.reader.inputEnd)
 
     // feed into filterer if exists
-    if (graph.filterer && frames.length != 0) {
-        frames.push(...await graph.filterer.filter(frames))
+    if (graph.filterer) {
+        const filterOuts = !sourcesEnd ? graph.filterer.filter(frames) : graph.filterer.flush()
+        frames.push(...await filterOuts)
     }
     // signal: no frames to write anymore 
-    const endWriting = graph.sources.every(s => s.reader.inputEnd) && frames.length == 0
+    const endWriting = sourcesEnd && frames.length == 0
 
     // write to destinations
     const outputs: {[nodeId: string]: WriteChunkData[]} = {}

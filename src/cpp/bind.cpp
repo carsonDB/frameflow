@@ -121,6 +121,7 @@ EMSCRIPTEN_BINDINGS(filter) {
     class_<Filterer>("Filterer")
         .constructor<std::map<std::string, std::string>, std::map<std::string, std::string>, std::map<std::string, std::string>, std::string>()
         .function("filter", &Filterer::filter, allow_raw_pointers())
+        .function("flush", &Filterer::flush, allow_raw_pointers())
     ;
     
 }

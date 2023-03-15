@@ -59,6 +59,7 @@ Filterer::Filterer(
     CHECK(ret >= 0, "cannot configure graph");
 }
 
+
 /** 
  * process once
  * In/Out frames should all have non-empty Frame::name.
@@ -73,7 +74,7 @@ vector<Frame*> Filterer::filter(vector<Frame*> frames) {
         if (buffersrc_ctx_map.count(id) == 0) continue;
         auto ctx = buffersrc_ctx_map[id];
         auto ret = av_buffersrc_add_frame_flags(ctx, frame->av_ptr(), AV_BUFFERSRC_FLAG_KEEP_REF);
-        CHECK(ret >= 0, "Error while feeding the audio filtergraph");
+        CHECK(ret >= 0, "Error while feeding the filtergraph");
         // pull filtered frames from each entry of filtergraph outputs
         for (auto const& [id, ctx] : buffersink_ctx_map) {
             while (1) {
@@ -94,3 +95,26 @@ vector<Frame*> Filterer::filter(vector<Frame*> frames) {
 }
     
 
+vector<Frame*> Filterer::flush() {
+    std::vector<Frame*> out_frames;
+    for (const auto& [id, ctx] : buffersrc_ctx_map) {
+        auto ret = av_buffersrc_add_frame_flags(ctx, NULL, AV_BUFFERSRC_FLAG_KEEP_REF);
+        CHECK(ret >= 0, "Error while flushing the filtergraph");
+        // pull filtered frames from each entry of filtergraph outputs
+        for (auto const& [id, ctx] : buffersink_ctx_map) {
+            while (1) {
+                auto out_frame = new Frame(id);
+                auto ret = av_buffersink_get_frame(ctx, out_frame->av_ptr());
+                if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+                    delete out_frame;
+                    break;
+                }
+                CHECK(ret >= 0, "error get filtered frames from buffersink");
+                out_frame->av_ptr()->pict_type = AV_PICTURE_TYPE_NONE;
+                out_frames.push_back(out_frame);
+            }
+        }
+    }
+
+    return out_frames;
+}

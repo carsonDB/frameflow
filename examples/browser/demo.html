@@ -55,7 +55,7 @@
         document.getElementById('trim').onclick = async () => {
             const onProgress = pg => document.getElementById('trim-progress').textContent = `${(pg*100).toFixed(2)}%`
             const src = await fflow.source('../assets/flame.avi')
-            const trimSrc = src.trim({start: -1, duration: 10}) // range auto adjust to src real range
+            const trimSrc = src.trim({start: 0, duration: 1}) // range auto adjust to src real range
             const blob = await trimSrc.exportTo(Blob, {format: 'mp4', progress: onProgress}) 
             document.getElementById('trim-video').src = URL.createObjectURL(blob)
         }
@@ -113,6 +113,17 @@
             }
 
             recorder.start()
+        }
+    </script>
+
+    <h2>👉Audio: loop</h2>
+    <audio id="loop-audio" controls></audio><br />
+    <button id="loop-button">Concat</button>
+    <script>
+        document.getElementById('loop-button').onclick = async () => {
+            const audio = await fflow.source('../assets/audio.mp3')
+            const blob = await audio.loop(3).exportTo(Blob, {format: 'wav'}) 
+            document.getElementById('loop-audio').src = URL.createObjectURL(blob)
         }
     </script>
 

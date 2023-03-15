@@ -133,6 +133,7 @@ class Frame extends CppClass {
 class Filterer extends CppClass {
     constructor(inStreams: StdMap<string, string>, outStreams: StdMap<string, string>, mediaTypes: StdMap<string, string>, graphSpec: string)
     filter(frames: StdVector<Frame>): StdVector<Frame>
+    flush(): StdVector<Frame>
     delete(): void
 }
 

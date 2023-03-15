@@ -38,8 +38,7 @@
         document.getElementById('test-transcode').onclick = async () => {
             const onProgress = pg => document.getElementById('test-progress').textContent = `${(pg*100).toFixed(2)}%`
             const vidSrc = await fflow.source(videoFile)
-            console.log(vidSrc.metadata)
-            const output = vidSrc
+            const output = fflow.concat([vidSrc, vidSrc])
 
             const blob = await output.exportTo(Blob, {format: 'mp4', progress: onProgress})
             document.getElementById('test-video').src = URL.createObjectURL(blob)

@@ -4,7 +4,8 @@ export type FilterArgs<T extends Filter['type']> = Extract<Filter, { type: T, ar
 export type Filter = 
 { type: 'tracks', args: 'video' | 'audio' } |
 { type: 'trim', args: { start: number, duration: number } } |
-// { type: 'loop', args: number } |
+{ type: 'setpts' } |
+{ type: 'fifo' } |
 { type: 'volume', args: number } |
 { type: 'merge' } | // implicit args: {number of inputs}
 { type: 'concat' } |
@@ -20,18 +21,28 @@ export function applySingleFilter(streamRefs: StreamRef[], filter: Filter): Stre
         const s = streamRef.from.outStreams[streamRef.index]
         switch (filter.type) {
             case 'trim': {
-                const {start, duration} = filter.args
                 const name = s.mediaType == 'audio' ? 'atrim' : 'trim'
-                // if (start < s.startTime || duration > s.duration)
-                //     throw `trim range (${start}, ${start + duration}) has exceeded input range (${s.startTime}, ${s.startTime + s.duration})`
-                const trimNode: FilterNode = {
+                const start = Math.max(filter.args.start, s.startTime)
+                const end = Math.min(start + filter.args.duration, s.startTime + s.duration)
+                const duration = Math.max(end - start, 0)
+                const from: FilterNode = {
                     type: 'filter', filter: {name, ffmpegArgs: {start, duration}}, 
                     inStreams: [streamRef], outStreams: [{...s, startTime: start, duration}] }
-                // first frame of trimmed part, pts reset to 0
-                const name2 = s.mediaType == 'audio' ? 'asetpts' : 'setpts'
+                return {from, index: 0}
+            }
+            // first frame pts reset to 0
+            case 'setpts': {
+                const name = s.mediaType == 'audio' ? 'asetpts' : 'setpts'
                 const from: FilterNode = {
-                    type: 'filter', filter: {name: name2, ffmpegArgs: 'PTS-STARTPTS'},
-                    inStreams: [{from: trimNode, index: 0}], outStreams: trimNode.outStreams }
+                    type: 'filter', filter: {name: name, ffmpegArgs: 'PTS-STARTPTS'},
+                    inStreams: [streamRef], outStreams: [{...s}] }
+                return {from, index: 0}
+            }
+            case 'fifo': {
+                const name = s.mediaType == 'audio' ? 'afifo' : 'fifo'
+                const from: FilterNode = {
+                    type: 'filter', filter: {name: name, ffmpegArgs: ''},
+                    inStreams: [streamRef], outStreams: [{...s}] }
                 return {from, index: 0}
             }
             case 'volume': {
