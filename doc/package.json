@@ -1,6 +1,6 @@
 {
   "name": "frameflow",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "private": true,
   "scripts": {
     "docusaurus": "docusaurus",
@@ -19,7 +19,7 @@
     "@docusaurus/theme-live-codeblock": "^2.3.1",
     "@mdx-js/react": "^1.6.22",
     "clsx": "^1.2.1",
-    "frameflow": "^0.1.5",
+    "frameflow": "^0.1.6",
     "react": "^17.0.2",
     "react-dom": "^17.0.2",
     "use-editable": "^2.3.3"
