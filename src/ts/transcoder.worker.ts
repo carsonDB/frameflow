@@ -3,7 +3,9 @@ import { Decoder, Encoder, Frame, Packet } from './codecs'
 import { WorkerHandlers } from "./message"
 import { FFmpegModule, ModuleType as FF, StdMap, StdVector, StreamInfo } from './types/ffmpeg'
 import { Flags } from './types/flags'
-import { BufferData, ChunkData, GraphInstance, SourceInstance, StreamMetadata, TargetInstance, WriteChunkData } from "./types/graph"
+import { 
+    BufferData, ChunkData, GraphInstance, SourceInstance, StreamMetadata, TargetInstance, WriteChunkData 
+} from "./types/graph"
 
 
 const streamId = (nodeId: string, streamIndex: number) => `${nodeId}:${streamIndex}`
@@ -517,7 +519,7 @@ class FrameSourceReader {
     #inputIO: InputIO
     Packet: FFmpegModule['Packet']
     
-    constructor(node: SourceInstance, streamInfo: StreamInfo, useWebCodecs: boolean) {
+    constructor(node: SourceInstance, streamInfo: StreamInfo, useWebCodecs?: boolean) {
         this.node = node
         this.#name = streamId(node.id, 0)
         this.fps = streamInfo.frameRate // todo...
@@ -577,7 +579,7 @@ async function newVideoTargetWriter(node: TargetInstance) {
         const id = streamId(from, index)
         const info = streamMetadataToInfo(s)
         const useWebCodecs = await Encoder.isWebCodecsSupported(info)
-        const encoder = new Encoder(info, useWebCodecs, node.format.container.formatName)
+        const encoder = new Encoder(info, useWebCodecs??false, node.format.container.formatName)
         // use inStream ref
         encoders[id] = encoder
         const timeBase = s.mediaType == 'audio' ? {num: 1, den: s.sampleRate} : {num: 1, den: s.frameRate}
@@ -703,9 +705,9 @@ class FrameTargetWriter {
     encoder: Encoder
     #outputIO: OutputIO
     
-    constructor(node: TargetInstance, streamInfo: StreamInfo, useWebCodecs: boolean) {
+    constructor(node: TargetInstance, streamInfo: StreamInfo, useWebCodecs?: boolean) {
         this.node = node
-        this.encoder = new Encoder(streamInfo, useWebCodecs, node.format.container.formatName)
+        this.encoder = new Encoder(streamInfo, useWebCodecs??false, node.format.container.formatName)
         this.#outputIO = new OutputIO()
     }
 

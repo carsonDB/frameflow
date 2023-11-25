@@ -416,7 +416,7 @@ export class Decoder {
     /**
      * @param useWebCodecs check `Decoder.isWebCodecsSupported` before contructor if `true`
      */
-    constructor(demuxer: FF['Demuxer'] | null, name: string, streamInfo: StreamInfo, useWebCodecs: boolean) {
+    constructor(demuxer: FF['Demuxer'] | null, name: string, streamInfo: StreamInfo, useWebCodecs?: boolean) {
         this.streamInfo = streamInfo
         this.#name = name
 

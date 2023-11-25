@@ -8,15 +8,15 @@ export interface AVRational { num: number, den: number }
 interface StdVector<T> {
     size(): number
     get(i: number): T
-    set(i: number, T)
-    push_back(t: T)
+    set(i: number, value: T): void
+    push_back(t: T): void
 }
 
 interface StdMap<T1, T2> {
     size(): number
     get(key: T1): T2
     keys(): StdVector<T1>
-    set(key: T1, val: T2)
+    set(key: T1, val: T2): void
 }
 
 class CppClass {

@@ -64,35 +64,35 @@ export type StreamMetadata = AudioStreamMetadata | VideoStreamMetadata
 /**
  * user defined graph
  */
-type UserNode = SourceNode | FilterNode | TargetNode
+export type UserNode = SourceNode | FilterNode | TargetNode
 export type SourceType = ReadableStream<ChunkData> | string | URL | RequestInfo | Blob | BufferData
 type FileSource = string | URL | RequestInfo | Blob | BufferData
 type StreamSource = SourceStream<ChunkData>
-interface StreamRef { from: SourceNode | FilterNode, index: number }
+export interface StreamRef { from: SourceNode | FilterNode, index: number }
 export interface SourceNode {
     type: 'source', outStreams: StreamMetadata[], url?: string
     data: { type: 'file', container: FormatMetadata, fileSize: number, source: FileSource } | 
             { type: 'stream', elementType: 'frame' | 'chunk', source: StreamSource }
 }
 
-interface FilterNode {
+export interface FilterNode {
     type: 'filter', inStreams: StreamRef[], outStreams: StreamMetadata[], 
     filter: { name: string, ffmpegArgs: string | {[k in string]?: string | number} }
 }
 
-interface TargetNode {
+export interface TargetNode {
     type: 'target', inStreams: StreamRef[], outStreams: StreamMetadata[], 
     format: { type: 'frame' | 'video', container: FormatMetadata }
 }
 
-type StreamInstanceRef = {from: string, index: number}
-type SourceInstance = 
+export type StreamInstanceRef = {from: string, index: number}
+export type SourceInstance = 
     Omit<SourceNode, "data"> & 
     {id: string} & 
     {data: Omit<Exclude<SourceNode['data'], {type: "file"}>, "source"> | 
            Omit<Exclude<SourceNode['data'], {type: "stream"}>, "source"> }
-type FilterInstance = Omit<FilterNode, "inStreams"> & {inStreams: StreamInstanceRef[], id: string}
-type TargetInstance = Omit<TargetNode, "inStreams"> & {inStreams: StreamInstanceRef[], id: string}
+export type FilterInstance = Omit<FilterNode, "inStreams"> & {inStreams: StreamInstanceRef[], id: string}
+export type TargetInstance = Omit<TargetNode, "inStreams"> & {inStreams: StreamInstanceRef[], id: string}
 
 /**
  * graph instance for execution
