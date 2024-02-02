@@ -18,12 +18,12 @@ export const vec2Array = <T>(vec: StdVector<T>) => {
     // vec delete ??
     return arr
 }
-const map2obj = (map: StdMap<string, string>) => {
-    const obj: {[k in string]: string} = {}
-    const keys = vec2Array(map.keys())
-    keys.forEach(k => obj[k] = map.get(k))
-    return obj
-}
+// const map2obj = (map: StdMap<string, string>) => {
+//     const obj: {[k in string]: string} = {}
+//     const keys = vec2Array(map.keys())
+//     keys.forEach(k => obj[k] = map.get(k))
+//     return obj
+// }
 
 function streamMetadataToInfo(s: StreamMetadata): StreamInfo {
     const format = s.mediaType == 'audio' ? s.sampleFormat : s.pixelFormat
@@ -33,11 +33,12 @@ function streamMetadataToInfo(s: StreamMetadata): StreamInfo {
 }
 
 function streamInfoToMetadata(s: StreamInfo): StreamMetadata {
+    const extraData = s.extraData.slice(0)
     if (s.mediaType == 'audio') {
-        return {...s, mediaType: s.mediaType, sampleFormat: s.format, volume: 1}
+        return {...s, mediaType: s.mediaType, sampleFormat: s.format, volume: 1, extraData}
     }
     else if (s.mediaType == 'video') {
-        return {...s, mediaType: s.mediaType, pixelFormat: s.format}
+        return {...s, mediaType: s.mediaType, pixelFormat: s.format, extraData}
     }
     else throw `not support other mediaType`
 }
@@ -83,9 +84,9 @@ async function loadModule(wasmBinary: ArrayBuffer) {
 
 const handler = new WorkerHandlers()
 
-handler.reply('getMetadata', async ({id, fullSize, url, wasm}) => {
+handler.reply('getMetadata', async ({id, fullSize, wasm}) => {
     const ffmpeg = await loadModule(wasm)
-    const inputIO = new InputIO(id, url, fullSize)
+    const inputIO = new InputIO(id, fullSize)
     const demuxer = new ffmpeg.Demuxer()
     await demuxer.build(inputIO)
     const {formatName, duration, bitRate, streamInfos} = demuxer.getMetadata()
@@ -129,17 +130,14 @@ handler.reply('deleteGraph', () => {
 class InputIO {
     #id: string
     #fullSize: number
-    #url: string
     #offset = 0
     #endOfFile = false
     #buffers: ChunkData[] = []
-    constructor(nodeId: string, url?: string, fullSize?: number) {
+    constructor(nodeId: string, fullSize?: number) {
         this.#id = nodeId
         this.#fullSize = fullSize ?? 0
-        this.#url = url ?? ''
     }
 
-    get url() { return this.#url }
     get size() { return this.#fullSize }
     get offset() { return this.#offset }
 
@@ -177,12 +175,13 @@ class InputIO {
         }, 0)
         this.#buffers = remainBuffers
         this.#offset += offset
-            
+
         return offset
     }
 
     async seek(pos: number) { 
         await handler.send('seek', {pos}, undefined, this.#id) 
+        this.#offset = pos
         this.#buffers = []
         this.#endOfFile = false
     }
@@ -427,9 +426,8 @@ export type TargetWriter = VideoTargetWriter | FrameTargetWriter
 /* demuxer need async build */
 async function newVideoSourceReader(node: SourceInstance) {
     const ffmpeg = getFFmpeg()
-    const url = node.url ?? ''
     const fileSize = node.data.type == 'file' ? node.data.fileSize : 0
-    const inputIO = new InputIO(node.id, url, fileSize)
+    const inputIO = new InputIO(node.id, fileSize)
     const demuxer = new ffmpeg.Demuxer()
     await demuxer.build(inputIO)
     const decoders: VideoSourceReader['decoders'] = {}

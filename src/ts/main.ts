@@ -230,7 +230,7 @@ async function newTarget(node: TargetNode, worker: FFWorker, args: ExportArgs) {
     return new Target(node, exporter, args)
 }
 
-class Target {
+export class Target {
     #node: TargetNode
     #exporter: Exporter
     #outputs: Chunk[] = []

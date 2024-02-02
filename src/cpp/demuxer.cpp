@@ -21,7 +21,8 @@ static int read_packet(void *opaque, uint8_t *buf, int buf_size)
 static int64_t seek_for_read(void* opaque, int64_t pos, int whence) {
     auto& reader = *reinterpret_cast<val*>(opaque);
     auto size = (int64_t)reader["size"].as<double>();
-    
+    auto offset = (int64_t)reader["offset"].as<double>();
+
     switch (whence) {
         case AVSEEK_SIZE:
             return size;
@@ -29,7 +30,7 @@ static int64_t seek_for_read(void* opaque, int64_t pos, int whence) {
             if (pos >= size) return AVERROR_EOF;
             reader.call<val>("seek", (double)pos).await(); break;
         case SEEK_CUR:
-            pos += (int64_t)reader["offset"].as<double>();
+            pos += offset;
             if (pos >= size) return AVERROR_EOF;
             reader.call<val>("seek", (double)pos).await(); break;
         case SEEK_END:
@@ -46,7 +47,6 @@ static int64_t seek_for_read(void* opaque, int64_t pos, int whence) {
 
 void Demuxer::build(val _reader) {
     reader = std::move(_reader); // reader will be destroyed at end of this function 
-    _url = reader["url"].as<std::string>();
     auto buffer = (uint8_t*)av_malloc(buf_size);
     auto readerPtr = reinterpret_cast<void*>(&reader);
     if ((int64_t)reader["size"].as<double>() <= 0)
@@ -55,7 +55,8 @@ void Demuxer::build(val _reader) {
         io_ctx = avio_alloc_context(buffer, buf_size, 0, readerPtr, &read_packet, NULL, &seek_for_read);
     format_ctx->pb = io_ctx;
     // open and get metadata
-    auto ret = avformat_open_input(&format_ctx, _url.c_str(), NULL, NULL);
+    auto ret = avformat_open_input(&format_ctx, NULL, NULL, NULL);
+
     CHECK(ret == 0, "Could not open input file.");
     ret = avformat_find_stream_info(format_ctx, NULL);
     CHECK(ret >= 0, "Could not open find stream info.");

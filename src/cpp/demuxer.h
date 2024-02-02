@@ -21,7 +21,6 @@ class Demuxer {
     AVIOContext* io_ctx;
     std::map<int, double> currentStreamsPTS; 
     int buf_size = 32*1024;
-    std::string _url;
     val reader;
 public:
     Demuxer() {
@@ -46,7 +45,7 @@ public:
     Packet* read();
 
     void dump() {
-        av_dump_format(format_ctx, 0, _url.c_str(), 0);
+        av_dump_format(format_ctx, 0, NULL, 0);
     }
 
     AVRational getTimeBase(int stream_index) {

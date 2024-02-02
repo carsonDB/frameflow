@@ -10,6 +10,7 @@ interface StdVector<T> {
     get(i: number): T
     set(i: number, value: T): void
     push_back(t: T): void
+    delete(): void
 }
 
 interface StdMap<T1, T2> {
@@ -28,7 +29,6 @@ class CppClass {
 interface ReaderForDemuxer {
     size: number
     offset: number
-    url: string
     read: (buffer: Uint8Array) => Promise<number>
     seek: (pos: number) => Promise<void>
 }
