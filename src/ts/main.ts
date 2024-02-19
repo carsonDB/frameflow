@@ -65,7 +65,7 @@ async function createSource(source: SourceType, args?: SourceArgs) {
 }
 
 
-class TrackGroup {
+export class TrackGroup {
     streams: StreamRef[]
     
     constructor(streams: StreamRef[]) {
@@ -153,7 +153,7 @@ class TrackGroup {
 
 
 // single track can be seen as num_group=1, for convience to visit each stream
-class Track extends TrackGroup {
+export class Track extends TrackGroup {
     constructor(stream: StreamRef) {
         super([stream])
     }

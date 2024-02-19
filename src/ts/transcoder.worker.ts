@@ -477,15 +477,19 @@ class VideoSourceReader {
         if (ffPkt.size == 0)
             this.#endOfPacket = true
         const decoder = this.decoders[ffPkt.streamIndex]
-        if (!decoder) throw `not found the decorder of source reader`
-        const pkt = new Packet(ffPkt, ffPkt.getTimeInfo().dts, decoder.mediaType)
-        const frames = this.inputEnd && pkt.size == 0 ? 
-                        (await decoder.flush()) : 
-                        (await decoder.decode(pkt))
-        // free temporary variables
-        pkt.close()
-
-        return frames
+        if (!decoder) {
+            ffPkt.delete()
+            return []
+        }
+        else {
+            const pkt = new Packet(ffPkt, ffPkt.getTimeInfo().dts, decoder.mediaType)
+            const frames = this.inputEnd && pkt.size == 0 ? 
+                            (await decoder.flush()) : 
+                            (await decoder.decode(pkt))
+            
+            pkt.close() // free temporary variables
+            return frames
+        }
     }
 
     close() {
