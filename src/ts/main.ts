@@ -5,22 +5,14 @@ import mime from 'mime'
 import { v4 as uuid } from 'uuid'
 
 import { applyMulitpleFilter, applySingleFilter, Filter, FilterArgs } from "./filters"
-import { loadWASM as _loadWASM } from './loader'
+import { LoadArgs, loadWorker } from './loader'
 import { FFWorker } from "./message"
 import { Chunk, Exporter, FileReader, getSourceInfo, newExporter, sourceToStreamCreator, StreamReader } from "./streamIO"
 import { BufferData, SourceNode, SourceType, StreamMetadata, StreamRef, TargetNode } from "./types/graph"
 import { Flags } from './types/flags'
 import { isNode } from './utils'
 import { webFrameToStreamMetadata } from './metadata'
-import Worker from 'worker-loader?inline=no-fallback!./transcoder.worker.ts'
 import { globalFlags } from './globals'
-
-
-
-// Warning: webpack 5 only support pattern: new Worker(new URL('', import.meta.url))
-// const createWorker = () => new Worker(new URL('./transcoder.worker.ts', import.meta.url))
-/* use worker inline way to avoid bundle issue as dependency for further bundle. */
-const createWorker = () => new Worker()
 
 
 interface SourceArgs {
@@ -34,17 +26,15 @@ interface SourceArgs {
  */
 async function createSource(source: SourceType, args?: SourceArgs) {
     const id = uuid() // temporarily node id for getMetadata
-    const {size, url} = await getSourceInfo(source)
-    const worker = new FFWorker(createWorker())
+    const {size} = await getSourceInfo(source)
+    const worker = await loadWorker()
     // check if file or stream
     if (size > 0 && !(source instanceof ReadableStream)) {
-        // start a worker to probe data
-        const reader = new FileReader(id, source, worker)
+        // start a reader to probe data
+        new FileReader(id, source, worker)
         // convert all src to stream
-        const wasm = await _loadWASM()
-        const {streams, container} = await worker.send('getMetadata', {id, fullSize: size, url: url??'', wasm})
+        const {streams, container} = await worker.send('getMetadata', {fileSize: size}, [], id)
         const srcTracks = new SourceTrackGroup(streams, {type: 'file', container, fileSize: size, source})
-        reader.close()
         return srcTracks
     }
     else {
@@ -104,7 +94,7 @@ export class TrackGroup {
 
     // export media in stream
     async export(args?: ExportArgs) {
-        const worker = new FFWorker(createWorker())
+        const worker = await (args?.worker ?? loadWorker())
         const node = await createTargetNode(this.streams, args ?? {}, worker)
         const target = await newTarget(node, worker, args ?? {})
         return target
@@ -258,15 +248,18 @@ export class Target {
      */
     async next(): Promise<Chunk | undefined> {
         // direct return if previous having previous outputs
-        if (this.#outputs.length > 0) return this.#outputs.shift() as Chunk
+        if (this.#outputs.length > 0) {
+            return this.#outputs.shift() as Chunk
+        }
         if (this.#end) return
         const {output, done, progress} = await this.#exporter.next()
+
         this.#progress.setProgress(progress)
         if (done) {
             this.#end = true
             await this.close()
         }
-        
+
         /* convert (DataBuffer | undefined)[] to DataBuffer */
         if (!output && !done) return await this.next()
         if (output) {
@@ -309,13 +302,15 @@ interface ExportArgs {
     video?: MediaStreamArgs // video track configurations in video container
     /* Export args */
     progress?: (pg: number) => void
+    /* Advanced args */
+    worker?: Promise<FFWorker>
 }
 
 async function createTargetNode(inStreams: StreamRef[], args: ExportArgs, worker: FFWorker): Promise<TargetNode> {
     // infer container format from url
     if (!args.format && !args.url) throw `must provide format name or url`
     const {format, video, audio} = await worker.send('inferFormatInfo',
-        { format: args.format ?? '', url: args.url ?? '', wasm: await _loadWASM() })
+        { format: args.format ?? '', url: args.url ?? '' }, [], '')
     
     const type = format.includes('rawvideo') ?
         'frame' :
@@ -377,14 +372,14 @@ export default {
     },
 
     /**
-     * Preload of wasm binary file.
+     * Preload of wasm binary file and loaded worker.
      * 
      * This function can be called multiple times, but only fetch once.
      * So don't worry about repetitive calls.
      * 
-     * @returns ArrayBuffer wasm binary
+     * @returns FFWorker if param 'newWorker' is true
      */
-    loadWASM: () => _loadWASM(),
+    load: (args?: LoadArgs) => loadWorker(args),
 }
 
 

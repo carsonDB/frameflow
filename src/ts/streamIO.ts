@@ -1,6 +1,6 @@
+import { v4 as uuid } from 'uuid'
 import { globalFlags, SourceStream } from './globals'
 import { buildGraphInstance } from './graph'
-import { loadWASM } from './loader'
 import { FFWorker } from "./message"
 import { BufferData, ChunkData, SourceNode, SourceType, TargetNode, WriteChunkData } from "./types/graph"
 import { isBrowser, isNode } from './utils'
@@ -119,7 +119,7 @@ export class FileReader {
     
     #enableReply() {
         
-        this.worker.reply('read', async (_, transferArr) => {
+        this.worker.reply('read', async (_, _2, transferArr) => {
             // create stream for the first time
             this.stream = this.stream ?? (await this.streamCreator(0))
             const data = await this.stream.read()
@@ -150,10 +150,6 @@ export class FileReader {
     //         this.#ondataReady = () => resolve()
     //     })
     // }
-
-    close() {
-        this.worker.close()
-    }
 }
 
 
@@ -172,7 +168,7 @@ export class StreamReader {
     }
 
     #enableReply() {
-        this.worker.reply('read', async (_, transferArr) => {
+        this.worker.reply('read', async (_, _2, transferArr) => {
             const chunk = await this.read()
             chunk && transferArr.push('buffer' in chunk ? chunk.buffer : chunk )
             return {inputs: chunk ? [chunk] : []}
@@ -198,7 +194,6 @@ export class StreamReader {
     }
 
     close(source: SourceNode) { 
-        this.worker.close()
         SourceCacheData.set(source, this.cacheData) 
     }
 }
@@ -249,6 +244,7 @@ export class Chunk {
  */
 export async function newExporter(node: TargetNode, worker: FFWorker) {
     const [graphInstance, node2id] = buildGraphInstance(node)
+    const id = uuid()
     const readers = []
     // create readers from sources
     for (const [node, id] of node2id) {
@@ -258,17 +254,18 @@ export async function newExporter(node: TargetNode, worker: FFWorker) {
             new StreamReader(id, SourceCacheData.get(node) ?? [], node.data.source, worker)
         readers.push(reader)
     }
-    const wasm = await loadWASM()
-    await worker.send('buildGraph', { graphInstance, wasm, flags: globalFlags.get() }) 
+    await worker.send('buildGraph', { graphInstance, flags: globalFlags.get() }, [], id) 
     
-    return new Exporter(worker, readers)
+    return new Exporter(id, worker, readers)
 }
 
 export class Exporter {
+    id: string
     worker: FFWorker
     readers: Reader[] // readers should be exists when exporting
     
-    constructor(worker: FFWorker, readers: Reader[]) {
+    constructor(id: string, worker: FFWorker, readers: Reader[]) {
+        this.id = id
         this.worker = worker
         this.readers = readers
     }
@@ -277,17 +274,17 @@ export class Exporter {
     async next() {
         // // make sure input reply ready
         // await Promise.all(this.readers.map(r => r.dataReady()))
-        const {outputs, progress, endWriting} = await this.worker.send('nextFrame', undefined)
+        const {outputs, progress, endWriting} = await this.worker.send('nextFrame', undefined, [], this.id)
         // todo... temporarily only output one target
         if (Object.values(outputs).length !=  1) throw `Currently only one target at a time allowed`
         const output = Object.values(outputs)[0]
+
         const chunks = (output??[]).map(d => new Chunk(d))
-        
+
         return { output: chunks, progress, done: endWriting }
     }
 
     async close() {
-        await this.worker.send('deleteGraph', undefined)
-        this.worker.close() 
+        await this.worker.send('deleteGraph', undefined, [], this.id)
     }
 }

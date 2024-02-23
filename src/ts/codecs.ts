@@ -6,7 +6,6 @@
 import { dataFormatMap, formatFF2Web, formatWeb2FF } from './metadata'
 import { getFFmpeg, vec2Array } from './transcoder.worker'
 import { ModuleType as FF, FrameInfo, StreamInfo, StdVector, DataFormat } from './types/ffmpeg'
-import { Log } from './utils'
 
 
 type WebPacket = EncodedVideoChunk | EncodedAudioChunk
@@ -278,7 +277,7 @@ export class Encoder {
                 })
                 this.encoder.configure(audioEncoderConfig(streamInfo))
             }
-            Log('WebCodecs:', this.encoder.constructor.name)
+            // Log('WebCodecs:', this.encoder.constructor.name)
         }
         else {
             const info = getFFmpeg().Muxer.inferFormatInfo(muxFormat, '')
@@ -437,7 +436,7 @@ export class Decoder {
                 decoder.configure(audioDecoderConfig(streamInfo))
                 this.decoder = decoder
             }
-            Log('WebCodecs:', this.decoder.constructor.name)
+            // Log('WebCodecs:', this.decoder.constructor.name)
         }
         else {
             this.decoder = demuxer ?

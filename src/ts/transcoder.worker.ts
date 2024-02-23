@@ -1,7 +1,7 @@
 import createModule from '../wasm/ffmpeg_built.js'
 import { Decoder, Encoder, Frame, Packet } from './codecs'
 import { WorkerHandlers } from "./message"
-import { FFmpegModule, ModuleType as FF, StdMap, StdVector, StreamInfo } from './types/ffmpeg'
+import { FFmpegModule, ModuleType as FF, StdVector, StreamInfo } from './types/ffmpeg'
 import { Flags } from './types/flags'
 import { 
     BufferData, ChunkData, GraphInstance, SourceInstance, StreamMetadata, TargetInstance, WriteChunkData 
@@ -18,12 +18,6 @@ export const vec2Array = <T>(vec: StdVector<T>) => {
     // vec delete ??
     return arr
 }
-// const map2obj = (map: StdMap<string, string>) => {
-//     const obj: {[k in string]: string} = {}
-//     const keys = vec2Array(map.keys())
-//     keys.forEach(k => obj[k] = map.get(k))
-//     return obj
-// }
 
 function streamMetadataToInfo(s: StreamMetadata): StreamInfo {
     const format = s.mediaType == 'audio' ? s.sampleFormat : s.pixelFormat
@@ -52,22 +46,23 @@ type SourceRuntime =
 type TargetRuntime = 
     { type: 'file' | 'frame', instance: TargetInstance, writer: TargetWriter }
 
+interface Runtime {
+    ffmpeg?: FFmpegModule
+    graphs: {[k in string]?: GraphRuntime}
+}
+
+
 interface GraphRuntime {
     sources: SourceRuntime[]
     filterer?: Filterer
     targets: TargetRuntime[]
     flags: Flags
-    ffmpeg?: FFmpegModule
 }
-const graph: GraphRuntime = {
-    sources: [],
-    targets: [],
-    flags: {}
-}
+const runtime: Runtime = { graphs: {} }
 
 export function getFFmpeg() {
-    if (!graph.ffmpeg) throw `GraphRuntime hasn't built, cannot get FFmpegModule`
-    return graph.ffmpeg
+    if (!runtime.ffmpeg) throw `GraphRuntime hasn't built, cannot get FFmpegModule`
+    return runtime.ffmpeg
 }
 
 // initiantate wasm module
@@ -84,9 +79,15 @@ async function loadModule(wasmBinary: ArrayBuffer) {
 
 const handler = new WorkerHandlers()
 
-handler.reply('getMetadata', async ({id, fullSize, wasm}) => {
-    const ffmpeg = await loadModule(wasm)
-    const inputIO = new InputIO(id, fullSize)
+handler.reply('load', async ({wasm}, _, transferArr) => {
+    runtime.ffmpeg = await loadModule(wasm)
+    transferArr.push(wasm)
+    return {wasm}
+})
+
+handler.reply('getMetadata', async ({fileSize}, id) => {
+    const ffmpeg = getFFmpeg()
+    const inputIO = new InputIO(id, fileSize)
     const demuxer = new ffmpeg.Demuxer()
     await demuxer.build(inputIO)
     const {formatName, duration, bitRate, streamInfos} = demuxer.getMetadata()
@@ -95,36 +96,35 @@ handler.reply('getMetadata', async ({id, fullSize, wasm}) => {
     return {container: {duration, bitRate, formatName}, streams}
 })
 
-handler.reply('inferFormatInfo', async ({format, url, wasm}) => {
-    const ffmpeg = await loadModule(wasm)
+handler.reply('inferFormatInfo', async ({format, url}) => {
+    const ffmpeg = getFFmpeg()
     return ffmpeg.Muxer.inferFormatInfo(format, url)
 })
 
 // three stages should send in order: buildGraph -> nextFrame -> deleteGraph
-handler.reply('buildGraph', async ({graphInstance, wasm, flags}) => { 
-    const ffmpeg = await loadModule(wasm)
-    graph.ffmpeg = ffmpeg
-    graph.flags = flags
-    await buildGraph(graphInstance, ffmpeg) 
+handler.reply('buildGraph', async ({graphInstance, flags}, id) => { 
+    const graph = await buildGraph(graphInstance)
+    runtime.graphs[id] = {...graph, flags}
 })
 
-handler.reply('nextFrame', async (_, transferArr) => {
+handler.reply('nextFrame', async (_, id, transferArr) => {
+    const graph = runtime.graphs[id]
     if (!graph) throw new Error("haven't built graph.")
     const result = await executeStep(graph)
     transferArr.push(
         ...Object.values(result.outputs).map(outs => 
             outs.map(({data}) => 'buffer' in data ? data.buffer : data)).flat())
-
     return result
 })
 
-handler.reply('deleteGraph', () => {
+handler.reply('deleteGraph', (_, id) => {
+    const graph = runtime.graphs[id]
     if (!graph) return
     graph.sources.forEach(source => source.reader.close())
     graph.filterer?.close()
     graph.targets.forEach(target => target.writer.close())
+    delete runtime.graphs[id]
 })
-
 
 /* direct connect to main thread, to retrieve input data */
 class InputIO {
@@ -141,14 +141,14 @@ class InputIO {
     get size() { return this.#fullSize }
     get offset() { return this.#offset }
 
-    async dataReady() {
+    async #dataReady() {
         if (this.#buffers.length > 0) return
         // cache empty, read from main thread
         // first time seek to start position
         if (this.#offset == 0 && this.#fullSize > 0) {
             await this.seek(0)
         }
-        const {inputs} = await handler.send('read', undefined, undefined, this.#id)
+        const {inputs} = await handler.send('read', undefined, [], this.#id)
         this.#buffers.push(...inputs)
         // end of file
         if (this.#buffers.length == 0)
@@ -157,13 +157,13 @@ class InputIO {
 
     /* for image read */
     async readImage() {
-        await this.dataReady()
+        await this.#dataReady()
         return this.#buffers.shift()
     }
 
     /* for demuxer (video) read */
     async read(buff: Uint8Array) {
-        await this.dataReady()
+        await this.#dataReady()
         
         const remainBuffers: BufferData[] = []
         const offset = this.#buffers.reduce((offset, b) => {
@@ -180,7 +180,7 @@ class InputIO {
     }
 
     async seek(pos: number) { 
-        await handler.send('seek', {pos}, undefined, this.#id) 
+        await handler.send('seek', {pos}, [], this.#id) 
         this.#offset = pos
         this.#buffers = []
         this.#endOfFile = false
@@ -216,7 +216,7 @@ class OutputIO {
 }
 
 
-async function buildGraph(graphInstance: GraphInstance, ffmpeg: FFmpegModule) {
+async function buildGraph(graphInstance: GraphInstance) {
     const sources: GraphRuntime['sources'] = []
     const targets: GraphRuntime['targets'] = []
     const { filterInstance, nodes } = graphInstance
@@ -257,9 +257,7 @@ async function buildGraph(graphInstance: GraphInstance, ffmpeg: FFmpegModule) {
         }
     }
     
-    graph.sources = sources
-    graph.filterer = filterer
-    graph.targets = targets
+    return {sources, targets, filterer}
 }
 
 
@@ -404,7 +402,7 @@ function buildFiltersGraph(graphInstance: FilterGraph, nodes: GraphInstance['nod
             await target.writer.writeFrames(frames)
         outputs[target.instance.id] = target.writer.pullOutputs()
     }
-    
+
     // delete frames
     frames.forEach(f => f?.close())
 
@@ -486,7 +484,7 @@ class VideoSourceReader {
             const frames = this.inputEnd && pkt.size == 0 ? 
                             (await decoder.flush()) : 
                             (await decoder.decode(pkt))
-            
+
             pkt.close() // free temporary variables
             return frames
         }

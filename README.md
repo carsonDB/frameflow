@@ -9,8 +9,6 @@ A both speedy and compatible video processing library for Web Browser, based on 
 - Get detailed metadata of video file by reading only several chunks, either from local disk or remote url.
 - Processing speed can be controlled either automatically or manually.
 
-⚠️ Note: **web browser** examples are tested. Nodejs hasn't been tested yet.
-
 ## Demo
 
 ```JavaScript
@@ -25,6 +23,20 @@ videoDom.src = URL.createObjectURL(blob)
 ```
 Although this example writes to blob entirely, then play.
 But underhood, it streams out chunks and then put togather.
+
+## Update from v0.1 to v0.2
+- v0.1 API is not changed. But underhood, previous version use an unique worker for each time.
+But this will cause too long to load (~1 second), and also cost too much memory 
+if processing many videos in the same time.
+- use `fflow.load()` to load the default worker with with loaded ffmpeg module, shared by all use cases.
+- use `fflow.load({newWorker: true})` to create an new worker with loaded ffmpeg module, and assign to `export` as a parameter. This multi-thread case will accelerate if having many `export` tasks.
+And sometimes, as a more complex case, if two `export` have dependencies, there may be a dead lock 
+if they share the same worker (thread).
+
+```JavaScript
+let worker = fflow.load({newWorker: true})
+let blob = await video.exportTo(Blob, {format: 'mp4', worker }) // group and trancode to 
+```
 
 ### More examples
 More detailed browser examples are in the `./examples/browser/`.

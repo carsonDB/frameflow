@@ -74,7 +74,7 @@
             const video = await fflow.source('../assets/Bunny.mp4')
             const videoTrack = video.filter('video').tracks()[0]
             const { height, width, frameRate } = videoTrack.metadata
-            const decodeStream = await videoTrack.export({ format: 'rawvideo' })
+            const decodeStream = await videoTrack.export({ format: 'rawvideo', worker: fflow.load({newWorker: true}) })
             // OffscreenCanvas
             const canvas = new OffscreenCanvas(width, height)
             const ctx = canvas.getContext('2d')
@@ -98,7 +98,8 @@
                 }
             })
             const encodeSource = await fflow.source(encodeStream, {frameRate})
-            const blob = await encodeSource.exportTo(Blob, {format: 'mp4', progress: onProgress}) 
+            const blob = await encodeSource.exportTo(Blob, 
+                {format: 'mp4', progress: onProgress, worker: fflow.load({newWorker: true})}) 
             document.getElementById('transcode-canvas-video').src = URL.createObjectURL(blob)
         }
     </script>
