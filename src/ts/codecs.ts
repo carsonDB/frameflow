@@ -21,7 +21,7 @@ const codecMap: {[k in string]?: string} = {
     // video codec https://www.w3.org/TR/webcodecs-codec-registry/#video-codec-registry
     av1: 'av01.0.00M.08',
     vp8: 'vp8',
-    h264: "avc1.424034",
+    h264: "avc1.640034",
     vp9: 'vp09.00.10.08',
     hevc: 'hev1.1.6.L93.B0',
     // audio codec https://www.w3.org/TR/webcodecs-codec-registry/#audio-codec-registry
@@ -229,16 +229,23 @@ export class Frame {
 }
 
 
-const videoEncorderConfig = (streamInfo: StreamInfo): VideoEncoderConfig => {
-    const config = {
+const videoEncorderConfig = (streamInfo: StreamInfo) => {
+    const config: VideoEncoderConfig = {
         codec: codecMap[streamInfo.codecName] ?? '',
         height: streamInfo.height,
         width: streamInfo.width,
         framerate: streamInfo.frameRate
     }
     
-    if (config.codec.includes('avc'))
-        Object.assign(config, { avc: { format: 'annexb' } })
+    if (config.codec.includes('avc')) {
+        Object.assign(config, { 
+            avc: { 
+                format: 'annexb',
+                profile: 'high',    // High profile for best quality
+                level: '5.1',       // Supports 4K@60fps
+            } 
+        })
+    }
     
     return config
 }
