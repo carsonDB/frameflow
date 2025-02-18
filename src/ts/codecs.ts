@@ -6,6 +6,7 @@
 import { dataFormatMap, formatFF2Web, formatWeb2FF } from './metadata'
 import { getFFmpeg, vec2Array } from './transcoder.worker'
 import { ModuleType as FF, FrameInfo, StreamInfo, StdVector, DataFormat } from './types/ffmpeg'
+import { Log } from './utils'
 
 
 type WebPacket = EncodedVideoChunk | EncodedAudioChunk
@@ -19,7 +20,7 @@ type WebDecoder = VideoDecoder | AudioDecoder
 // https://developer.mozilla.org/en-US/docs/Web/Media/Formats/codecs_parameter
 const codecMap: {[k in string]?: string} = {
     // video codec https://www.w3.org/TR/webcodecs-codec-registry/#video-codec-registry
-    av1: 'av01.0.00M.08',
+    av1: 'av01.0.04M.08',
     vp8: 'vp8',
     h264: "avc1.640034",
     vp9: 'vp09.00.10.08',
@@ -133,7 +134,7 @@ export class Frame {
         }
         else if (this.WebFrame instanceof AudioData) {
             return {
-                format: formatWeb2FF('sample', this.WebFrame.format), 
+                format: formatWeb2FF('sample', this.WebFrame.format ?? 's16'), 
                 channels: this.WebFrame.numberOfChannels,
                 channelLayout: getFFmpeg().Frame.inferChannelLayout(this.WebFrame.numberOfChannels),
                 sampleRate: this.WebFrame.sampleRate,
@@ -232,19 +233,17 @@ export class Frame {
 const videoEncorderConfig = (streamInfo: StreamInfo) => {
     const config: VideoEncoderConfig = {
         codec: codecMap[streamInfo.codecName] ?? '',
+        bitrate: streamInfo.bitRate || undefined,
         height: streamInfo.height,
         width: streamInfo.width,
-        framerate: streamInfo.frameRate
+        framerate: streamInfo.frameRate,
     }
     
+    // H.264 specific optimizations
     if (config.codec.includes('avc')) {
-        Object.assign(config, { 
-            avc: { 
-                format: 'annexb',
-                profile: 'high',    // High profile for best quality
-                level: '5.1',       // Supports 4K@60fps
-            } 
-        })
+        config.avc = {
+            format: 'annexb',
+        }
     }
     
     return config
@@ -252,6 +251,7 @@ const videoEncorderConfig = (streamInfo: StreamInfo) => {
 
 const audioEncoderConfig = (streamInfo: StreamInfo): AudioEncoderConfig => ({
     codec: codecMap[streamInfo.codecName] ?? '',
+    bitrate: streamInfo.bitRate || undefined,
     numberOfChannels: streamInfo.channels,
     sampleRate: streamInfo.sampleRate,
 })
@@ -300,18 +300,24 @@ export class Encoder {
         if (streamInfo.mediaType == 'video') {
             try {
                 const { supported, config } = await VideoEncoder.isConfigSupported(videoEncorderConfig(streamInfo))
+                if (!supported)
+                    Log(supported,config, streamInfo)
                 return supported
             }
-            catch {
+            catch (e) {
+                Log(e)
                 return false
             }
         }
         else if (streamInfo.mediaType == 'audio') {
             try {
                 const { supported, config } = await AudioEncoder.isConfigSupported(audioEncoderConfig(streamInfo))
+                if (!supported)
+                    Log(supported,config, streamInfo)
                 return supported
             }
-            catch {
+            catch (e) {
+                Log(e)
                 return false
             }
         }

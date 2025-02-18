@@ -8,7 +8,7 @@ import { applyMulitpleFilter, applySingleFilter, Filter, FilterArgs } from "./fi
 import { LoadArgs, loadWorker } from './loader'
 import { FFWorker } from "./message"
 import { Chunk, Exporter, FileReader, getSourceInfo, newExporter, sourceToStreamCreator, StreamReader } from "./streamIO"
-import { BufferData, SourceNode, SourceType, StreamMetadata, StreamRef, TargetNode } from "./types/graph"
+import { AudioStreamMetadata, BufferData, SourceNode, SourceType, StreamMetadata, StreamRef, TargetNode, VideoStreamMetadata } from "./types/graph"
 import { Flags } from './types/flags'
 import { isNode } from './utils'
 import { webFrameToStreamMetadata } from './metadata'
@@ -290,16 +290,12 @@ export class Target {
     }
 }
 
-interface MediaStreamArgs {
-    // codec?: string // todo... replace with discrete options
-}
-
 interface ExportArgs {
     /* Target args */
     url?: string // export filename
     format?: string // specified video/audio/image/rawvideo container format // todo...
-    audio?: MediaStreamArgs, // audio track configurations in video container
-    video?: MediaStreamArgs // video track configurations in video container
+    audio?: Partial<AudioStreamMetadata>, // audio track configurations in video container
+    video?: Partial<VideoStreamMetadata>, // video track configurations in video container
     /* Export args */
     progress?: (pg: number) => void
     /* Advanced args */
@@ -321,9 +317,9 @@ async function createTargetNode(inStreams: StreamRef[], args: ExportArgs, worker
     const outStreams = inStreams.map(s => {
         const stream = s.from.outStreams[s.index]
         if (stream.mediaType == 'audio') 
-            return {...stream, codecName: audio.codecName}
+            return {...stream, codecName: audio.codecName, ...args.audio}
         else if (stream.mediaType == 'video') 
-            return {...stream, codecName: video.codecName}
+            return {...stream, codecName: video.codecName, ...args.video}
         return stream
     })
 

@@ -68,9 +68,18 @@
     <video id="transcode-canvas-video" controls></video><br />
     <button id="transcode-canvas-button">Transcode-Canvas</button>
     <span id="transcode-canvas-progress"></span>
+    <select id="codec-select">
+        <option value="h264">H.264</option>
+        <option value="vp9">VP9</option>
+        <option value="av1">AV1</option>
+    </select>
+    <input type="number" id="bitrate-input" value="2000000" min="100000" step="100000" />
+    <label for="bitrate-input">bits/s</label>
     <script>
         document.getElementById('transcode-canvas-button').onclick = async () => {
             const onProgress = pg => document.getElementById('transcode-canvas-progress').textContent = `${(pg*100).toFixed(2)}%`
+            const codec = document.getElementById('codec-select').value
+            const bitrate = parseInt(document.getElementById('bitrate-input').value)
             const video = await fflow.source('../assets/Bunny.mp4')
             const videoTrack = video.filter('video').tracks()[0]
             const { height, width, frameRate } = videoTrack.metadata
@@ -98,12 +107,17 @@
                 }
             })
             const encodeSource = await fflow.source(encodeStream, {frameRate})
-            const blob = await encodeSource.exportTo(Blob, 
-                {format: 'mp4', progress: onProgress, worker: fflow.load({newWorker: true})}) 
+            const blob = await encodeSource.exportTo(Blob, {
+                format: 'mp4', 
+                progress: onProgress, 
+                worker: fflow.load({newWorker: true}),
+                video: {
+                    codecName: codec,
+                    bitRate: bitrate
+                }
+            }) 
             document.getElementById('transcode-canvas-video').src = URL.createObjectURL(blob)
         }
     </script>
-
-
 
 </body>
