@@ -90,6 +90,7 @@ EMSCRIPTEN_BINDINGS(packet) {
         .property("streamIndex", &Packet::stream_index)
         .function("getData", &Packet::getData)
         .function("getTimeInfo", &Packet::getTimeInfo)
+        .function("setTimeInfo", &Packet::setTimeInfo)
         .function("dump", &Packet::dump)
     ;
 }
@@ -146,8 +147,9 @@ EMSCRIPTEN_BINDINGS(muxer) {
         .constructor<std::string, emscripten::val>()
         .class_function("inferFormatInfo", &Muxer::inferFormatInfo)
         .function("dump", &Muxer::dump)
-        .function("newStream", select_overload<void(Encoder*, AVRational)>(&Muxer::newStream), allow_raw_pointers())
-        .function("newStream", select_overload<void(StreamInfo)>(&Muxer::newStream), allow_raw_pointers())
+        .function("newStreamWithDemuxer", select_overload<void(Demuxer*, int)>(&Muxer::newStream), allow_raw_pointers())
+        .function("newStreamWithEncoder", select_overload<void(Encoder*)>(&Muxer::newStream), allow_raw_pointers())
+        .function("newStreamWithInfo", select_overload<void(StreamInfo)>(&Muxer::newStream), allow_raw_pointers())
         .function("writeHeader", &Muxer::writeHeader)
         .function("writeTrailer", &Muxer::writeTrailer)
         .function("writeFrame", &Muxer::writeFrame, allow_raw_pointers())

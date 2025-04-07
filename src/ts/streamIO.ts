@@ -4,6 +4,8 @@ import { buildGraphInstance } from './graph'
 import { FFWorker } from "./message"
 import { BufferData, ChunkData, SourceNode, SourceType, TargetNode, WriteChunkData } from "./types/graph"
 import { isBrowser, isNode } from './utils'
+import { isHLSStream } from './hls'
+import { createHLSStream } from './hls'
 
 
 type SourceStreamCreator = (seekPos: number) => Promise<SourceStream<ChunkData>>
@@ -22,8 +24,13 @@ async function fetchSourceInfo(url: URL | RequestInfo): Promise<{size: number, u
 }
 
 
-export async function getSourceInfo(src: SourceType): Promise<{size: number, url?: string}> {
+export async function getSourceInfo(src: SourceType): Promise<{size: number, url?: string, isHLS?: boolean}> {
     if (typeof src == 'string') {
+        // Check if it's an HLS stream
+        if (await isHLSStream(src)) {
+            return { size: 0, url: src, isHLS: true }
+        }
+        // normal url
         if (isNode) {
             try {
                 return await fetchSourceInfo(new URL(src)) // URL is used to valid url string
@@ -60,12 +67,19 @@ async function fetchSourceData(url: RequestInfo | URL, startPos: number): Promis
     return new SourceStream(body)
 }
 
+
 /* convert any quanlified src into creator of SourceStream<DataBuffer> */
 export const sourceToStreamCreator = (src: SourceType): SourceStreamCreator => async (seekPos: number) => {
     if (typeof src == 'string') {
+        // Check if it's an HLS stream
+        if (await isHLSStream(src)) {
+            return new SourceStream(await createHLSStream(src))
+        }
+        // normal url
         if (isNode) {
             try {
-                return await fetchSourceData(new URL(src), seekPos) // valid url
+                const url = new URL(src)
+                return await fetchSourceData(url, seekPos) // valid url
             } catch {
                 // check if local file exits
                 const { createReadStream } = require('fs').promises
@@ -276,7 +290,7 @@ export class Exporter {
         // await Promise.all(this.readers.map(r => r.dataReady()))
         const {outputs, progress, endWriting} = await this.worker.send('nextFrame', undefined, [], this.id)
         // todo... temporarily only output one target
-        if (Object.values(outputs).length !=  1) throw `Currently only one target at a time allowed`
+        if (Object.values(outputs).length >  1) throw `Currently only one target at a time allowed`
         const output = Object.values(outputs)[0]
 
         const chunks = (output??[]).map(d => new Chunk(d))

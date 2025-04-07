@@ -72,7 +72,7 @@ export interface StreamRef { from: SourceNode | FilterNode, index: number }
 export interface SourceNode {
     type: 'source', outStreams: StreamMetadata[], url?: string
     data: { type: 'file', container: FormatMetadata, fileSize: number, source: FileSource } | 
-            { type: 'stream', elementType: 'frame' | 'chunk', source: StreamSource }
+            { type: 'stream', container?: FormatMetadata, elementType: 'frame' | 'chunk', source: StreamSource }
 }
 
 export interface FilterNode {

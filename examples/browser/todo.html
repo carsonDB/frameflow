@@ -12,19 +12,6 @@
         window.onload = () => window.fflow = frameflow
     </script>
 
-    <h2>👉mp4 to mp4</h2>
-    <video id="mp4-mp4-video" controls></video><br />
-    <button id="mp4-mp4-transcode">Transcode</button>
-    <span id="mp4-mp4-progress"></span>
-    <script>
-        document.getElementById('mp4-mp4-transcode').onclick = async () => {
-            const onProgress = pg => document.getElementById('mp4-mp4-progress').textContent = `${(pg*100).toFixed(2)}%`
-            const video = await fflow.source('../assets/Bunny.mp4')
-            const blob = await video.filter('video').exportTo(Blob, {format: 'mp4', progress: onProgress}) 
-            document.getElementById('mp4-mp4-video').src = URL.createObjectURL(blob)
-        }
-    </script>
-
     <h2>👉Upload video (developing...) </h2>
     <video id="test-video" controls></video><br />
     <input id="uploader" type="file" />

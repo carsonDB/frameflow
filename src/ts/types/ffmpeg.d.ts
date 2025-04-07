@@ -104,6 +104,7 @@ class Packet extends CppClass {
     get streamIndex(): number
     getData(): Uint8Array
     getTimeInfo(): TimeInfo
+    setTimeInfo(timeInfo: TimeInfo): void
     dump():void
 }
 
@@ -169,8 +170,9 @@ class Muxer extends CppClass {
     constructor(formatName: string, writer: WriterForMuxer)
     static inferFormatInfo(format: string, filename: string): InferredFormatInfo
     dump(): void
-    newStream(encoder: Encoder, time_base): void
-    newStream(streamInfo: StreamInfo): void
+    newStreamWithDemuxer(demuxer: Demuxer, streamIndex: number): void
+    newStreamWithEncoder(encoder: Encoder): void
+    newStreamWithInfo(streamInfo: StreamInfo): void
     // openIO(): void
     writeHeader(): void
     writeTrailer(): void

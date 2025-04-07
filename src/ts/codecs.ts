@@ -42,8 +42,9 @@ export class Packet {
     constructor(pkt: FF['Packet'] | WebPacket, dts: number, mediaType: 'video' | 'audio') {
         this.dts = dts
         this.mediaType = mediaType
-        if (pkt instanceof getFFmpeg().Packet)
+        if (pkt instanceof getFFmpeg().Packet) {
             this.FFPacket = pkt
+        }
         else {
             // todo...
             if (this.dts == 0)
@@ -263,7 +264,6 @@ export class Encoder {
     outputs: WebPacket[] = []
     #dts = 0
     #frameCount = 0
-
     /**
      * @param useWebCodecs check `Encoder.isWebCodecsSupported` before contructor if `true`
      */

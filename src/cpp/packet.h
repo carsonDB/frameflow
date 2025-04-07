@@ -39,14 +39,18 @@ public:
     
     int stream_index() const { return packet->stream_index; }
     
-    // void set_stream_index(int index) { packet->stream_index = index; }
-    
     emscripten::val getData() { 
         return emscripten::val(emscripten::typed_memory_view(packet->size, packet->data)); // check length of data
     }
 
     TimeInfo getTimeInfo() {
         return {.pts = (double)packet->pts, .dts = (double)packet->dts, .duration = (double)packet->duration};
+    }
+
+    void setTimeInfo(TimeInfo info) {
+        packet->pts = info.pts;
+        packet->dts = info.dts;
+        packet->duration = info.duration;
     }
 
     void dump() {

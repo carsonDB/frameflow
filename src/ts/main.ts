@@ -26,38 +26,48 @@ interface SourceArgs {
  */
 async function createSource(source: SourceType, args?: SourceArgs) {
     const id = uuid() // temporarily node id for getMetadata
-    const {size} = await getSourceInfo(source)
+    const { size, isHLS } = await getSourceInfo(source)
     const worker = await loadWorker()
-    // check if file or stream
+    // check if file (seekable)
     if (size > 0 && !(source instanceof ReadableStream)) {
         // start a reader to probe data
         new FileReader(id, source, worker)
         // convert all src to stream
-        const {streams, container} = await worker.send('getMetadata', {fileSize: size}, [], id)
-        const srcTracks = new SourceTrackGroup(streams, {type: 'file', container, fileSize: size, source})
+        const { streams, container } = await worker.send('getMetadata', { fileSize: size }, [], id)
+        const srcTracks = new SourceTrackGroup(streams, { type: 'file', container, fileSize: size, source })
         return srcTracks
     }
+    // check if hls stream
+    else if (isHLS) {
+        const stream = await sourceToStreamCreator(source)(0)
+        const reader = new StreamReader(id, [], stream, worker)
+        const { streams, container } = await worker.send('getMetadata', { fileSize: 0 }, [], id)
+        const srcTracks = new SourceTrackGroup(streams, { type: 'stream', container, elementType: 'chunk', source: stream })
+        reader.close(srcTracks.node)
+        return srcTracks
+    }
+    // check if stream of frames/samples (webcodecs)
     else {
         const stream = await sourceToStreamCreator(source)(0)
         const reader = new StreamReader(id, [], stream, worker)
         const firstChunk = await reader.probe()
         // get metadata directly from image/samples
         if (firstChunk instanceof VideoFrame || firstChunk instanceof AudioData) {
-            const streamMetadata = webFrameToStreamMetadata(firstChunk, args??{})
+            const streamMetadata = webFrameToStreamMetadata(firstChunk, args ?? {})
             const srcTracks = new SourceTrackGroup(
-                [streamMetadata], {type: 'stream', elementType: 'frame', source: stream})
+                [streamMetadata], { type: 'stream', elementType: 'frame', source: stream })
             reader.close(srcTracks.node)
             return srcTracks
         }
         else
-            throw `Only stream image/samples are allowed`
+            throw `Not supported stream type`
     }
 }
 
 
 export class TrackGroup {
     streams: StreamRef[]
-    
+
     constructor(streams: StreamRef[]) {
         this.streams = streams
     }
@@ -81,14 +91,14 @@ export class TrackGroup {
     }
 
     // group filters
-    trim(args: FilterArgs<'trim'>) { 
-        const trimmed = applySingleFilter(this.streams, {type: 'trim', args}) 
-        return new FilterTrackGroup({type: 'setpts'}, trimmed)
+    trim(args: FilterArgs<'trim'>) {
+        const trimmed = applySingleFilter(this.streams, { type: 'trim', args })
+        return new FilterTrackGroup({ type: 'setpts' }, trimmed)
     }
     // loop(args: FilterArgs<'loop'>) { return new FilterTrackGroup({ type: 'loop', args }, this.streams) }
-    loop(args: number) { return new FilterTrackGroup({ type: 'concat' }, null, Array(args).fill(this.streams) ) }
-    setVolume(args: FilterArgs<'volume'>) { 
-        return new FilterTrackGroup({ type: 'volume', args}, this.streams) 
+    loop(args: number) { return new FilterTrackGroup({ type: 'concat' }, null, Array(args).fill(this.streams)) }
+    setVolume(args: FilterArgs<'volume'>) {
+        return new FilterTrackGroup({ type: 'volume', args }, this.streams)
     }
     setDataFormat(args: FilterArgs<'format'>) { return new FilterTrackGroup({ type: 'format', args }, this.streams) }
 
@@ -107,33 +117,33 @@ export class TrackGroup {
     exportTo(dest: typeof Blob, args?: ExportArgs): Promise<Blob>
     exportTo(dest: HTMLVideoElement, args?: ExportArgs): Promise<void>
     async exportTo(
-        dest: string | typeof ArrayBuffer | typeof Blob | HTMLVideoElement, 
+        dest: string | typeof ArrayBuffer | typeof Blob | HTMLVideoElement,
         args?: ExportArgs
     ): Promise<void | BufferData | Blob> {
         if (dest instanceof HTMLVideoElement) throw `not implemented yet`
         else if (dest == ArrayBuffer || dest == Blob) {
             const target = await this.export(args)
-            const chunks: {data: BufferData, offset: number}[] = []
+            const chunks: { data: BufferData, offset: number }[] = []
             let length = 0
             for await (const chunk of target) {
                 if (!chunk.data) continue
                 length = Math.max(length, chunk.offset + chunk.data.byteLength)
-                chunks.push({data: chunk.data, offset: chunk.offset})
+                chunks.push({ data: chunk.data, offset: chunk.offset })
             }
             const videoData = new Uint8Array(length)
             chunks.forEach(c => videoData.set(c.data, c.offset))
             if (dest == ArrayBuffer) return videoData
-            return new Blob([videoData], {type: mime.getType(target.format) ?? ''})
+            return new Blob([videoData], { type: mime.getType(target.format) ?? '' })
         }
         else if (typeof dest == 'string') {
             const url = dest
             if (!isNode) throw `not implemented yet`
-            const target = await this.export({...args, url})
+            const target = await this.export({ ...args, url })
             const { createWriteStream } = require('fs')
             const writer = createWriteStream(url) as NodeJS.WriteStream
-            for await (const {data, offset} of target) {
+            for await (const { data, offset } of target) {
                 if (!data) continue
-                writer.write(data, ) // todo...
+                writer.write(data,) // todo...
             }
             writer.end()
         }
@@ -147,7 +157,7 @@ export class Track extends TrackGroup {
     constructor(stream: StreamRef) {
         super([stream])
     }
-    
+
     get metadata() { return this.streams[0].from.outStreams[this.streams[0].index] }
 }
 
@@ -155,15 +165,15 @@ export class Track extends TrackGroup {
 class SourceTrackGroup extends TrackGroup {
     node: SourceNode
     constructor(streams: StreamMetadata[], data: SourceNode['data']) {
-        const node: SourceNode = { type:'source', outStreams: streams, data }
-        super(streams.map((s, i) => ({from: node, index: i}) ))
+        const node: SourceNode = { type: 'source', outStreams: streams, data }
+        super(streams.map((s, i) => ({ from: node, index: i })))
         this.node = node
     }
 
-    get metadata() { 
+    get metadata() {
         if (this.node.data.type == 'file') {
             return {
-                ...this.node.data.container, 
+                ...this.node.data.container,
                 tracks: this.node.outStreams
             }
         }
@@ -183,7 +193,7 @@ class FilterTrackGroup extends TrackGroup {
      * @param inStreamsArr multiple filter inputs
      */
     constructor(filter: Filter, inStreams: StreamRef[] | null, inStreamsArr: StreamRef[][] = []) {
-        const streamRefs = inStreams ? 
+        const streamRefs = inStreams ?
             applySingleFilter(inStreams, filter) : applyMulitpleFilter(inStreamsArr, filter)
         super(streamRefs)
     }
@@ -198,7 +208,7 @@ class Progress {
     progress = 0
     callback?: (pg: number) => void
     handler: ReturnType<typeof setInterval>
-    constructor(callback?: (pg: number) => void, ms=200) {
+    constructor(callback?: (pg: number) => void, ms = 200) {
         this.callback = callback
         this.handler = setInterval(() => {
             this.callback?.(this.progress)
@@ -252,7 +262,7 @@ export class Target {
             return this.#outputs.shift() as Chunk
         }
         if (this.#end) return
-        const {output, done, progress} = await this.#exporter.next()
+        const { output, done, progress } = await this.#exporter.next()
 
         this.#progress.setProgress(progress)
         if (done) {
@@ -272,12 +282,12 @@ export class Target {
     [Symbol.asyncIterator]() {
         const target = this
         return {
-            async next(): Promise<{value: Chunk, done: boolean}> {
+            async next(): Promise<{ value: Chunk, done: boolean }> {
                 const output = await target.next()
-                return {value: output ?? new Chunk(new Uint8Array()), done: !output}
+                return { value: output ?? new Chunk(new Uint8Array()), done: !output }
             },
-            async return(): Promise<{value: Chunk, done: boolean}> { 
-                await target.close() 
+            async return(): Promise<{ value: Chunk, done: boolean }> {
+                await target.close()
                 return { value: new Chunk(new Uint8Array()), done: true }
             }
         }
@@ -305,9 +315,9 @@ interface ExportArgs {
 async function createTargetNode(inStreams: StreamRef[], args: ExportArgs, worker: FFWorker): Promise<TargetNode> {
     // infer container format from url
     if (!args.format && !args.url) throw `must provide format name or url`
-    const {format, video, audio} = await worker.send('inferFormatInfo',
+    const { format, video, audio } = await worker.send('inferFormatInfo',
         { format: args.format ?? '', url: args.url ?? '' }, [], '')
-    
+
     const type = format.includes('rawvideo') ?
         'frame' :
         mime.getType(format)?.includes('image') ? 'frame' : 'video'
@@ -316,15 +326,17 @@ async function createTargetNode(inStreams: StreamRef[], args: ExportArgs, worker
     const { duration, bitRate } = keyStream
     const outStreams = inStreams.map(s => {
         const stream = s.from.outStreams[s.index]
-        if (stream.mediaType == 'audio') 
-            return {...stream, codecName: audio.codecName, ...args.audio}
-        else if (stream.mediaType == 'video') 
-            return {...stream, codecName: video.codecName, ...args.video}
+        if (stream.mediaType == 'audio')
+            return { ...stream, codecName: audio.codecName, ...args.audio }
+        else if (stream.mediaType == 'video')
+            return { ...stream, codecName: video.codecName, ...args.video }
         return stream
     })
 
-    return {type: 'target', inStreams, outStreams,
-        format: { type, container: {formatName: format, duration, bitRate}}}
+    return {
+        type: 'target', inStreams, outStreams,
+        format: { type, container: { formatName: format, duration, bitRate } }
+    }
 }
 
 
@@ -343,8 +355,8 @@ export default {
      * @param options unused temporarily
      * @returns SourceTrackGroup can be used further.
      */
-    source: (src: SourceType, options?: {}) => createSource(src, options),
-    
+    source: (src: SourceType, options?: SourceArgs) => createSource(src, options),
+
     /** 
     * Convert array of Track or TrackGroup into one TrackGroup.
     * This is convenient when we need to apply operations on multiple tracks.
@@ -355,7 +367,7 @@ export default {
     /**
      * Multiple audio tracks merge into one audio track.
      */
-    merge: (trackArr: (TrackGroup | Track)[]) => 
+    merge: (trackArr: (TrackGroup | Track)[]) =>
         new FilterTrackGroup({ type: 'merge' }, null, trackArr.map(t => t.streams)),
 
     /**
