@@ -13,6 +13,7 @@ import { Flags } from './types/flags'
 import { isNode } from './utils'
 import { webFrameToStreamMetadata } from './metadata'
 import { globalFlags } from './globals'
+import { getStaticHLSMetadata } from './hls'
 
 
 interface SourceArgs {
@@ -38,10 +39,12 @@ async function createSource(source: SourceType, args?: SourceArgs) {
         return srcTracks
     }
     // check if hls stream
-    else if (isHLS) {
+    else if (isHLS && typeof source == 'string') {
         const stream = await sourceToStreamCreator(source)(0)
         const reader = new StreamReader(id, [], stream, worker)
+        const metadata = await getStaticHLSMetadata(source)
         const { streams, container } = await worker.send('getMetadata', { fileSize: 0 }, [], id)
+        container.duration = metadata.totalDuration
         const srcTracks = new SourceTrackGroup(streams, { type: 'stream', container, elementType: 'chunk', source: stream })
         reader.close(srcTracks.node)
         return srcTracks
@@ -130,6 +133,7 @@ export class TrackGroup {
                 length = Math.max(length, chunk.offset + chunk.data.byteLength)
                 chunks.push({ data: chunk.data, offset: chunk.offset })
             }
+
             const videoData = new Uint8Array(length)
             chunks.forEach(c => videoData.set(c.data, c.offset))
             if (dest == ArrayBuffer) return videoData

@@ -1,11 +1,10 @@
 import { v4 as uuid } from 'uuid'
 import { globalFlags, SourceStream } from './globals'
 import { buildGraphInstance } from './graph'
+import { createHLSStream, isHLSStream } from './hls'
 import { FFWorker } from "./message"
 import { BufferData, ChunkData, SourceNode, SourceType, TargetNode, WriteChunkData } from "./types/graph"
 import { isBrowser, isNode } from './utils'
-import { isHLSStream } from './hls'
-import { createHLSStream } from './hls'
 
 
 type SourceStreamCreator = (seekPos: number) => Promise<SourceStream<ChunkData>>

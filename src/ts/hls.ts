@@ -12,6 +12,69 @@ export async function isHLSStream(url: string): Promise<boolean> {
     }
 }
 
+export async function getStaticHLSMetadata(url: string): Promise<{ totalSize: number; segmentCount: number; totalDuration: number }> {
+    try {
+        const baseUrl = url.substring(0, url.lastIndexOf('/') + 1)
+        const playlistInfo = await parsePlaylist(url, baseUrl)
+        
+        let totalSize = 0
+        let segmentCount = 0
+        let totalDuration = 0
+
+        const getMetadata = async (listInfo: PlaylistInfo) => {
+            if (listInfo.segmentUrls.length == 0) return { totalSize: 0, segmentCount: 0, totalDuration: 0 }
+            const firstSegmentUrl = listInfo.segmentUrls[0]
+            
+            // First try HEAD request
+            const headResponse = await fetch(firstSegmentUrl, { method: 'HEAD' })
+            const contentLength = headResponse.headers.get('content-length')
+            
+            if (contentLength) {
+                const segmentSize = parseInt(contentLength)
+                totalSize = segmentSize * listInfo.segmentUrls.length
+                segmentCount = listInfo.segmentUrls.length
+            } else {
+                // If HEAD didn't work, download the first segment
+                const response = await fetch(firstSegmentUrl)
+                const data = await response.arrayBuffer()
+                const segmentSize = data.byteLength
+                totalSize = segmentSize * listInfo.segmentUrls.length
+                segmentCount = listInfo.segmentUrls.length
+            }
+
+            // Calculate total duration from the playlist
+            const response = await fetch(url)
+            const text = await response.text()
+            const lines = text.split('\n')
+            
+            for (const line of lines) {
+                if (line.startsWith('#EXTINF:')) {
+                    const durationMatch = line.match(/#EXTINF:([\d.]+)/)
+                    if (durationMatch) {
+                        totalDuration += parseFloat(durationMatch[1])
+                    }
+                }
+            }
+
+            return { totalSize, segmentCount, totalDuration }
+        }
+
+        // If it's a master playlist, we need to get the segments from the best variant
+        if (playlistInfo.isMaster && playlistInfo.variantUrls.length > 0) {
+            const bestVariantUrl = await selectBestVariant(playlistInfo.variantUrls, baseUrl)
+            const variantBaseUrl = bestVariantUrl.substring(0, bestVariantUrl.lastIndexOf('/') + 1)
+            const variantInfo = await parsePlaylist(bestVariantUrl, variantBaseUrl)
+            return getMetadata(variantInfo)
+        } else {
+            // Direct segment playlist
+            return getMetadata(playlistInfo)
+        }
+    } catch (error) {
+        console.error('Error getting HLS metadata:', error)
+        return { totalSize: 0, segmentCount: 0, totalDuration: 0 }
+    }
+}
+
 interface PlaylistInfo {
     isMaster: boolean
     variantUrls: { url: string; bandwidth: number }[]

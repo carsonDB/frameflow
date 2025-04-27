@@ -233,7 +233,7 @@ export class Frame {
 
 const videoEncorderConfig = (streamInfo: StreamInfo) => {
     const config: VideoEncoderConfig = {
-        codec: codecMap[streamInfo.codecName] ?? '',
+        codec: codecMap[streamInfo.codecName] ?? 'h264',
         bitrate: streamInfo.bitRate || undefined,
         height: streamInfo.height,
         width: streamInfo.width,
@@ -251,7 +251,7 @@ const videoEncorderConfig = (streamInfo: StreamInfo) => {
 }
 
 const audioEncoderConfig = (streamInfo: StreamInfo): AudioEncoderConfig => ({
-    codec: codecMap[streamInfo.codecName] ?? '',
+    codec: codecMap[streamInfo.codecName] ?? 'aac',
     bitrate: streamInfo.bitRate || undefined,
     numberOfChannels: streamInfo.channels,
     sampleRate: streamInfo.sampleRate,
@@ -300,8 +300,8 @@ export class Encoder {
         if (streamInfo.mediaType == 'video') {
             try {
                 const { supported, config } = await VideoEncoder.isConfigSupported(videoEncorderConfig(streamInfo))
-                if (!supported)
-                    Log(supported,config, streamInfo)
+                // if (!supported)
+                //     Log(supported,config, streamInfo)
                 return supported
             }
             catch (e) {
@@ -312,8 +312,8 @@ export class Encoder {
         else if (streamInfo.mediaType == 'audio') {
             try {
                 const { supported, config } = await AudioEncoder.isConfigSupported(audioEncoderConfig(streamInfo))
-                if (!supported)
-                    Log(supported,config, streamInfo)
+                // if (!supported)
+                //     Log(supported,config, streamInfo)
                 return supported
             }
             catch (e) {

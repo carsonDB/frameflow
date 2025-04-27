@@ -490,6 +490,9 @@ async function executeStep(graph: GraphRuntime) {
             frames.push(...await filterOuts)
         }
 
+        // signal: no frames to write anymore 
+        endWriting = sourcesEnd && frames.length == 0
+
         // write to destinations
         for (const target of graph.targets) {
             if (endWriting) {
@@ -562,8 +565,9 @@ class VideoSourceReader {
 
     get progress() {
         const time = this.currentTime
-        if (this.node.data.type == 'file') {
-            return time / this.node.data.container.duration
+        const duration = this.node.data.container?.duration ?? 0
+        if (duration > 0) {
+            return time / duration
         }
         return null
     }

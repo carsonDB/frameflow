@@ -42,13 +42,12 @@
     <span id="hls-progress"></span>
     <script>
         document.getElementById('hls-button').onclick = async () => {
+            const onProgress = pg => document.getElementById('hls-progress').textContent = `${(pg * 100).toFixed(2)}%`
             const hlsUrl = `http://sample.vodobox.net/skate_phantom_flex_4k/fullhd/skate_phantom_flex_4k_4160_1080p.m3u8`
             // Load HLS stream
             const hlsSource = await fflow.source(hlsUrl)
             // Export to MP4
-            document.getElementById('hls-progress').textContent = 'Loading...'
-            const blob = await hlsSource.exportTo(Blob, { format: 'mp4' })
-            document.getElementById('hls-progress').textContent = 'Done'
+            const blob = await hlsSource.exportTo(Blob, { format: 'mp4', progress: onProgress })
             // Display the converted video
             document.getElementById('hls-video').src = URL.createObjectURL(blob)
         }
