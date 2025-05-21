@@ -9,7 +9,7 @@ import {
     VideoStreamMetadata,
     WriteChunkData
 } from "./types/graph"
-import { Log } from './utils'
+import { Log, BufferPool } from './utils'
 
 const streamId = (nodeId: string, streamIndex: number) => `${nodeId}:${streamIndex}`
 export const vec2Array = <T>(vec: StdVector<T>) => {
@@ -82,6 +82,8 @@ async function loadModule(wasmBinary: ArrayBuffer) {
     return ffmpeg
 }
 
+const bufferPool = new BufferPool()
+
 
 const handler = new WorkerHandlers()
 
@@ -116,10 +118,12 @@ handler.reply('buildGraph', async ({ graphInstance, flags }, id) => {
 handler.reply('nextFrame', async (_, id, transferArr) => {
     const graph = runtime.graphs[id]
     if (!graph) throw new Error("haven't built graph.")
-    const result = await executeStep(graph)
+    const result = await executeStep(graph)    
+
     transferArr.push(
         ...Object.values(result.outputs).map(outs =>
             outs.map(({ data }) => 'buffer' in data ? data.buffer : data)).flat())
+
     return result
 })
 
@@ -130,6 +134,10 @@ handler.reply('deleteGraph', (_, id) => {
     graph.filterer?.close()
     graph.targets.forEach(target => target.writer.close())
     delete runtime.graphs[id]
+})
+
+handler.reply('releaseWorkerBuffer', ({ buffer }) => {
+    bufferPool.delete(buffer)
 })
 
 /* direct connect to main thread, to retrieve input data */
@@ -170,17 +178,27 @@ class InputIO {
     /* for demuxer (video) read */
     async read(buff: Uint8Array) {
         await this.#dataReady()
-
+        const usedBuffers: BufferData[] = []
         const remainBuffers: BufferData[] = []
         const offset = this.#buffers.reduce((offset, b) => {
             if (!('byteLength' in b)) throw `only read chunk with byteLength`
             const size = Math.min(buff.byteLength - offset, b.byteLength)
             size > 0 && buff.set(b.subarray(0, size), offset)
-            b.byteLength > size && remainBuffers.push(b.subarray(size, b.byteLength))
+            if (b.byteLength > size) {
+                remainBuffers.push(b.subarray(size, b.byteLength))
+            }
+            else {
+                usedBuffers.push(b)
+            }
             return offset + size
         }, 0)
         this.#buffers = remainBuffers
         this.#offset += offset
+        // release buffers
+        if (usedBuffers.length > 0) {
+            // don't use await, because it will block the thread
+            handler.send('releaseMainBuffer', { buffers: usedBuffers }, [...usedBuffers.map(b => b.buffer)], this.#id)
+        }
 
         return offset
     }
@@ -204,7 +222,9 @@ class OutputIO {
 
     write(data: ChunkData) {
         if ('byteLength' in data) {
-            this.#buffers.push({ data: data.slice(0), offset: this.#offset })
+            const clonedData = bufferPool.create(data.byteLength)
+            clonedData.set(data)
+            this.#buffers.push({ data: clonedData, offset: this.#offset })
             this.#offset += data.byteLength
         }
         else {
@@ -717,7 +737,6 @@ class VideoTargetWriter {
     muxer: FF['Muxer']
     #outputIO: OutputIO
     firstWrite = false
-    #dts: { [streamId: string]: number } = {}
     dataFilterers: { [streamId: string]: Filterer | undefined | null } = {} // null means no need
 
     constructor(
@@ -732,7 +751,6 @@ class VideoTargetWriter {
         this.encoders = encoders
         this.#outputIO = outputIO
         this.targetStreamIndexes = targetStreamIndexes
-        this.#dts = Object.fromEntries(node.outStreams.map(s => [streamId(node.id, s.index), 0]))
     }
 
     writePacket(pkt: Packet, streamId: string) {
@@ -742,7 +760,7 @@ class VideoTargetWriter {
             this.muxer.writeHeader()
         }
         const ffPkt = pkt.toFF()
-        if (ffPkt.size > 0) {            
+        if (ffPkt.size > 0) {
             // Write the packet to the muxer
             const streamIndex = this.targetStreamIndexes[streamId]
             this.muxer.writeFrame(ffPkt, streamIndex)

@@ -125,6 +125,10 @@ EMSCRIPTEN_BINDINGS(filter) {
         .function("flush", &Filterer::flush, allow_raw_pointers())
     ;
     
+    class_<BitstreamFilterer>("BitstreamFilterer")
+        .constructor<std::string, Demuxer*, int, Muxer*, int>()
+        .function("filter", &BitstreamFilterer::filter, allow_raw_pointers())
+    ;
 }
 
 EMSCRIPTEN_BINDINGS(encode) {

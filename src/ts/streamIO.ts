@@ -4,7 +4,7 @@ import { buildGraphInstance } from './graph'
 import { createHLSStream, isHLSStream } from './hls'
 import { FFWorker } from "./message"
 import { BufferData, ChunkData, SourceNode, SourceType, TargetNode, WriteChunkData } from "./types/graph"
-import { isBrowser, isNode } from './utils'
+import { BufferPool } from './utils'
 
 
 type SourceStreamCreator = (seekPos: number) => Promise<SourceStream<ChunkData>>
@@ -30,18 +30,7 @@ export async function getSourceInfo(src: SourceType): Promise<{size: number, url
             return { size: 0, url: src, isHLS: true }
         }
         // normal url
-        if (isNode) {
-            try {
-                return await fetchSourceInfo(new URL(src)) // URL is used to valid url string
-            } catch {
-                // check if local file exits
-                const { stats } = require('fs').promises
-                return { url: src, size: (await stats(src)).size }
-            }    
-        }
-        else if (isBrowser) {
-            return await fetchSourceInfo(src)
-        }
+        return await fetchSourceInfo(src)
     }
     else if (src instanceof URL || src instanceof Request) {
         return await fetchSourceInfo(src)
@@ -52,7 +41,7 @@ export async function getSourceInfo(src: SourceType): Promise<{size: number, url
     else if (src instanceof ReadableStream) {
         return { size: 0}
     }
-    else if (src instanceof ArrayBuffer || (isNode && src instanceof Buffer)) {
+    else if (src instanceof ArrayBuffer) {
         return { size: src.byteLength }
     }
 
@@ -75,19 +64,7 @@ export const sourceToStreamCreator = (src: SourceType): SourceStreamCreator => a
             return new SourceStream(await createHLSStream(src))
         }
         // normal url
-        if (isNode) {
-            try {
-                const url = new URL(src)
-                return await fetchSourceData(url, seekPos) // valid url
-            } catch {
-                // check if local file exits
-                const { createReadStream } = require('fs').promises
-                return new SourceStream(createReadStream(src) as NodeJS.ReadStream)
-            }    
-        }
-        else if (isBrowser) {
-            return await fetchSourceData(src, seekPos)
-        }
+        return await fetchSourceData(src, seekPos)
     }
     else if (src instanceof URL || src instanceof Request) {
         return await fetchSourceData(src, seekPos)
@@ -98,7 +75,7 @@ export const sourceToStreamCreator = (src: SourceType): SourceStreamCreator => a
     else if (src instanceof ReadableStream) { // ignore seekPos
         return new SourceStream(src)
     }
-    else if (src instanceof ArrayBuffer || (isNode && src instanceof Buffer)) {
+    else if (src instanceof ArrayBuffer) {
         return new SourceStream(new ReadableStream({ 
                 start(s) { 
                     s.enqueue(new Uint8Array(src.slice(seekPos))) 
@@ -171,6 +148,7 @@ export class StreamReader {
     #id: string
     worker: FFWorker
     stream: SourceStream<ChunkData>
+    bufferPool = new BufferPool()
 
     constructor(id: string, cacheData: ChunkData[], stream: SourceStream<ChunkData>, worker: FFWorker) {
         this.#id = id
@@ -190,6 +168,10 @@ export class StreamReader {
         this.worker.reply('seek', () => {
             throw `Stream input cannot be seeked.`
         }, this.#id)
+
+        this.worker.reply('releaseMainBuffer', ({ buffers }) => {
+            buffers.forEach(buffer => this.bufferPool.delete(buffer))
+        }, this.#id)
     }
 
     get end() { return this.stream.end }
@@ -201,9 +183,13 @@ export class StreamReader {
     }
 
     async read() {
-        if (this.cacheData.length > 0)
-            return this.cacheData.shift()
-        return await this.stream.read()
+        const chunk = this.cacheData.shift() ?? await this.stream.read()
+        if (chunk && 'byteLength' in chunk) {
+            const cloned = this.bufferPool.create(chunk.byteLength)
+            cloned.set(chunk)
+            return cloned
+        }
+        return chunk
     }
 
     close(source: SourceNode) { 
@@ -225,7 +211,11 @@ const SourceCacheData = new WeakMap<SourceNode, ChunkData[]>()
 export class Chunk {
     #data: ChunkData
     #offset = 0
-    constructor(data: ChunkData | WriteChunkData) {
+    worker: FFWorker
+    id: string
+    constructor(data: ChunkData | WriteChunkData, worker: FFWorker, id: string) {
+        this.worker = worker
+        this.id = id
         if ('offset' in data) {
             this.#data = data.data
             this.#offset = data.offset
@@ -248,6 +238,16 @@ export class Chunk {
 
     get offset() {
         return this.#offset
+    }
+
+    close() {
+        if (this.#data instanceof VideoFrame) 
+            this.#data.close()
+        else if (this.#data instanceof AudioData) 
+            this.#data.close()
+        else if ('buffer' in this.#data) {
+            this.worker.send('releaseWorkerBuffer', { buffer: this.#data }, [this.#data.buffer], this.id)
+        }
     }
 }
 
@@ -272,6 +272,10 @@ export async function newExporter(node: TargetNode, worker: FFWorker) {
     return new Exporter(id, worker, readers)
 }
 
+
+/**
+ * Exporter is a class that exports data from a graph.
+ */
 export class Exporter {
     id: string
     worker: FFWorker
@@ -292,7 +296,7 @@ export class Exporter {
         if (Object.values(outputs).length >  1) throw `Currently only one target at a time allowed`
         const output = Object.values(outputs)[0]
 
-        const chunks = (output??[]).map(d => new Chunk(d))
+        const chunks = (output??[]).map(d => new Chunk(d, this.worker, this.id))
 
         return { output: chunks, progress, done: endWriting }
     }

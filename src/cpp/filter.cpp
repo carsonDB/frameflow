@@ -118,3 +118,11 @@ vector<Frame*> Filterer::flush() {
 
     return out_frames;
 }
+
+// BitstreamFilterer implementation
+void BitstreamFilterer::filter(Packet* packet) {
+    int ret = av_bsf_send_packet(bsf_ctx, packet->av_packet());
+    CHECK(ret >= 0, "Error sending packet to bitstream filter");
+    ret = av_bsf_receive_packet(bsf_ctx, packet->av_packet());
+    CHECK(ret >= 0, "Error receiving packet from bitstream filter");
+}

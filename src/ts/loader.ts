@@ -2,7 +2,7 @@
  * WASM Module manager
  * Note: this file import from built wasm files, which should be built beforehand.
  */
-
+declare const __DEV__: boolean;
 import Worker from 'worker-loader?inline=no-fallback!./transcoder.worker.ts'
 // @ts-ignore
 import pkgJSON from '../../package.json'
@@ -19,7 +19,7 @@ const wasmFileName = `ffmpeg_built.wasm`
 let DefaultURL = `https://unpkg.com/frameflow@${pkgJSON.version}/dist/${wasmFileName}`
 
 // this if branch will be removed after built
-if (process.env.NODE_ENV == 'development') {
+if (__DEV__) {
     DefaultURL = new URL(`../wasm/ffmpeg_built.wasm`, import.meta.url).href
     console.assert(DefaultURL.includes(wasmFileName)) // keep same wasm name with prod one
 }

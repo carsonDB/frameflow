@@ -31,6 +31,10 @@ interface Messages {
         send: void
         reply: void
     }
+    releaseWorkerBuffer: {
+        send: { buffer: Uint8Array }
+        reply: void
+    }
 }
 
 type BackMessageType = keyof BackMessages
@@ -41,6 +45,10 @@ interface BackMessages {
     }
     seek: {
         send: { pos: number }
+        reply: void
+    }
+    releaseMainBuffer: {
+        send: { buffers: Uint8Array[] }
         reply: void
     }
 }

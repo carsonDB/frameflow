@@ -1,4 +1,5 @@
 const path = require('path');
+const webpack = require('webpack');
 const TerserPlugin = require("terser-webpack-plugin");
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 
@@ -47,6 +48,9 @@ const devConfig = {
             title: 'FrameFlow dev',
             template: 'examples/browser/index.html',
         }),
+        new webpack.DefinePlugin({
+            __DEV__: JSON.stringify(process.env.NODE_ENV !== 'production')
+        })
     ],
     devServer: {
         static: path.join(__dirname, "examples"),

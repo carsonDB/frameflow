@@ -84,6 +84,12 @@ public:
         CHECK(ret == 0, "Error when writing trailer");
     }
     void writeFrame(Packet* packet, int stream_i);
+
+    // only for C++
+    AVStream* av_stream(int index) { 
+        CHECK(index >= 0 && index < format_ctx->nb_streams, "index out of range");
+        return format_ctx->streams[index]; 
+    }
 };
 
 

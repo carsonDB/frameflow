@@ -5,7 +5,7 @@
 
 import { SourceStream } from "../globals"
 
-export type BufferData = Uint8Array | Buffer
+export type BufferData = Uint8Array
 export type ChunkData = BufferData | VideoFrame | AudioData
 export interface WriteChunkData { data: ChunkData, offset: number }
 

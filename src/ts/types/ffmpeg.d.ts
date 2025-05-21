@@ -137,6 +137,12 @@ class Filterer extends CppClass {
     flush(): StdVector<Frame>
     delete(): void
 }
+// bitstream filter
+class BitstreamFilterer extends CppClass {
+    constructor(filterName: string, demuxer: Demuxer, inStreamIndex: number, muxer: Muxer, outStreamIndex: number)
+    filter(packet: Packet): void
+    delete(): void
+}
 
 // encode
 class Encoder extends CppClass {
@@ -188,6 +194,7 @@ interface ModuleClass {
     Frame: typeof Frame
     Packet: typeof Packet
     Filterer: typeof Filterer
+    BitstreamFilterer: typeof BitstreamFilterer
 }
 
 type ModuleInstance = {[k in keyof ModuleClass]: InstanceType<ModuleClass[k]>}

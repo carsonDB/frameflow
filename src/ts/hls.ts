@@ -12,37 +12,17 @@ export async function isHLSStream(url: string): Promise<boolean> {
     }
 }
 
-export async function getStaticHLSMetadata(url: string): Promise<{ totalSize: number; segmentCount: number; totalDuration: number }> {
+export async function getStaticHLSMetadata(url: string): Promise<{ segmentCount: number; totalDuration: number }> {
     try {
         const baseUrl = url.substring(0, url.lastIndexOf('/') + 1)
         const playlistInfo = await parsePlaylist(url, baseUrl)
         
-        let totalSize = 0
-        let segmentCount = 0
-        let totalDuration = 0
 
         const getMetadata = async (listInfo: PlaylistInfo) => {
-            if (listInfo.segmentUrls.length == 0) return { totalSize: 0, segmentCount: 0, totalDuration: 0 }
-            const firstSegmentUrl = listInfo.segmentUrls[0]
-            
-            // First try HEAD request
-            const headResponse = await fetch(firstSegmentUrl, { method: 'HEAD' })
-            const contentLength = headResponse.headers.get('content-length')
-            
-            if (contentLength) {
-                const segmentSize = parseInt(contentLength)
-                totalSize = segmentSize * listInfo.segmentUrls.length
-                segmentCount = listInfo.segmentUrls.length
-            } else {
-                // If HEAD didn't work, download the first segment
-                const response = await fetch(firstSegmentUrl)
-                const data = await response.arrayBuffer()
-                const segmentSize = data.byteLength
-                totalSize = segmentSize * listInfo.segmentUrls.length
-                segmentCount = listInfo.segmentUrls.length
-            }
-
+            if (listInfo.segmentUrls.length == 0) return { segmentCount: 0, totalDuration: 0 }
+            const segmentCount = listInfo.segmentUrls.length
             // Calculate total duration from the playlist
+            let totalDuration = 0
             const response = await fetch(url)
             const text = await response.text()
             const lines = text.split('\n')
@@ -56,7 +36,7 @@ export async function getStaticHLSMetadata(url: string): Promise<{ totalSize: nu
                 }
             }
 
-            return { totalSize, segmentCount, totalDuration }
+            return { segmentCount, totalDuration }
         }
 
         // If it's a master playlist, we need to get the segments from the best variant
@@ -71,7 +51,7 @@ export async function getStaticHLSMetadata(url: string): Promise<{ totalSize: nu
         }
     } catch (error) {
         console.error('Error getting HLS metadata:', error)
-        return { totalSize: 0, segmentCount: 0, totalDuration: 0 }
+        return { segmentCount: 0, totalDuration: 0 }
     }
 }
 
@@ -160,43 +140,93 @@ async function selectBestVariant(variants: { url: string; bandwidth: number }[],
     return sortedVariants[0].url
 }
 
-export async function createHLSStream(url: string): Promise<ReadableStream<BufferData>> {
+export async function createHLSStream(url: string, options: { maxBufferSize?: number } = {}): Promise<ReadableStream<BufferData>> {
     let currentSegment = 0
     let playlist: string[] = []
     let baseUrl = url.substring(0, url.lastIndexOf('/') + 1)
+    let isLive = false
+    let lastUpdateTime = Date.now()
+    const maxBufferSize = options.maxBufferSize || 3 // Default segments in buffer stream
 
     const fetchSegment = async (segmentUrl: string): Promise<ArrayBuffer> => {
         const response = await fetch(segmentUrl)
         return await response.arrayBuffer()
     }
 
+    const updatePlaylist = async () => {
+        try {
+            const masterInfo = await parsePlaylist(url, baseUrl)
+            
+            if (masterInfo.isMaster && masterInfo.variantUrls.length > 0) {
+                const bestVariantUrl = await selectBestVariant(masterInfo.variantUrls, baseUrl)
+                const variantBaseUrl = bestVariantUrl.substring(0, bestVariantUrl.lastIndexOf('/') + 1)
+                const variantInfo = await parsePlaylist(bestVariantUrl, variantBaseUrl)
+                playlist = variantInfo.segmentUrls
+            } else {
+                playlist = masterInfo.segmentUrls
+            }
+            
+            // Check if this is a live stream
+            isLive = playlist.some(url => url.includes('live') || url.includes('event'))
+            lastUpdateTime = Date.now()
+        } catch (error) {
+            console.error('Error updating playlist:', error)
+        }
+    }
+
     return new ReadableStream({
         async start(controller) {
+            await updatePlaylist()
+        },
+
+        async pull(controller) {
             try {
-                // First parse the master playlist
-                const masterInfo = await parsePlaylist(url, baseUrl)
-                
-                if (masterInfo.isMaster && masterInfo.variantUrls.length > 0) {
-                    // Select the best variant based on actual network conditions
-                    const bestVariantUrl = await selectBestVariant(masterInfo.variantUrls, baseUrl)
-                    const variantBaseUrl = bestVariantUrl.substring(0, bestVariantUrl.lastIndexOf('/') + 1)
-                    const variantInfo = await parsePlaylist(bestVariantUrl, variantBaseUrl)
-                    playlist = variantInfo.segmentUrls
-                } else {
-                    // Direct segment playlist
-                    playlist = masterInfo.segmentUrls
+                // For live streams, check for playlist updates every 5 seconds
+                if (isLive && Date.now() - lastUpdateTime > 5000) {
+                    await updatePlaylist()
                 }
 
-                while (currentSegment < playlist.length) {
-                    const segmentUrl = playlist[currentSegment]
+                // If we've reached the end of the playlist
+                if (currentSegment >= playlist.length) {
+                    if (isLive) {
+                        // For live streams, wait for new segments
+                        await new Promise(resolve => setTimeout(resolve, 1000))
+                        await updatePlaylist()
+                    } else {
+                        // For VOD, close the stream
+                        controller.close()
+                        return
+                    }
+                }
+
+                // Calculate how many segments to buffer
+                const segmentsToBuffer = Math.min(
+                    maxBufferSize,
+                    playlist.length - currentSegment
+                )
+
+                // Fetch and enqueue multiple segments up to the buffer limit
+                for (let i = 0; i < segmentsToBuffer; i++) {
+                    const segmentUrl = playlist[currentSegment + i]
                     const data = await fetchSegment(segmentUrl)
                     controller.enqueue(new Uint8Array(data))
-                    currentSegment++
                 }
-                controller.close()
+                currentSegment += segmentsToBuffer
+
+                // If we have more segments to buffer, schedule another pull
+                if (currentSegment < playlist.length) {
+                    // The stream will automatically call pull again when the consumer is ready
+                    return
+                }
             } catch (error) {
                 controller.error(error)
             }
+        },
+
+        cancel() {
+            // Clean up any resources if needed
+            currentSegment = 0
+            playlist = []
         }
     })
 }

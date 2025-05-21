@@ -1,4 +1,3 @@
-
 #ifndef FILTER_H
 #define FILTER_H
 
@@ -8,11 +7,15 @@ extern "C" {
     #include <libavfilter/avfilter.h>
     #include <libavfilter/buffersrc.h>
     #include <libavfilter/buffersink.h>
+    #include <libavcodec/bsf.h>
 }
 
 #include "frame.h"
 #include "stream.h"
+#include "demuxer.h"
+#include "muxer.h"
 using namespace std;
+
 
 class FilterGraph {
     AVFilterGraph* graph;
@@ -52,6 +55,33 @@ public:
     Filterer(map<string, string> inParams, map<string, string> outParams, map<string, string> mediaTypes, string filterSpec);
     vector<Frame*> filter(vector<Frame*>);
     vector<Frame*> flush();
+};
+
+
+class BitstreamFilterer {
+    AVBSFContext* bsf_ctx;
+
+public:
+    BitstreamFilterer(string filter_name, Demuxer* demuxer, int in_stream_index, Muxer* muxer, int out_stream_index) {
+        const AVBitStreamFilter* bsf = av_bsf_get_by_name(filter_name.c_str());
+        CHECK(bsf != NULL, "Could not find bitstream filter");
+        av_bsf_alloc(bsf, &bsf_ctx);
+
+        // copy codec parameters
+        auto istream = demuxer->av_stream(in_stream_index);
+        auto ostream = muxer->av_stream(out_stream_index);
+        auto ret = avcodec_parameters_copy(bsf_ctx->par_in, istream->codecpar);
+        CHECK(ret >= 0, "Failed to copy codec parameters to bitstream filter");
+        ret = avcodec_parameters_copy(bsf_ctx->par_out, ostream->codecpar);
+        CHECK(ret >= 0, "Failed to copy codec parameters to bitstream filter");
+
+        ret = av_bsf_init(bsf_ctx);
+        CHECK(ret >= 0, "Failed to initialize bitstream filter");
+    }
+    ~BitstreamFilterer() { av_bsf_free(&bsf_ctx); }
+
+    AVBSFContext* av_bsfContext() { return bsf_ctx; }
+    void filter(Packet* packet);
 };
 
 

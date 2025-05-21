@@ -45,10 +45,11 @@ So you can customize to write to any other targets in stream way.
 
 ```JavaScript
 // `exportTo` actually use `export` underhood
-const target = await this.export(Blob, {format: 'mp4'})
+const target = await this.export({format: 'mp4'})
 for await (const chunk of target) {
-    if (!chunk.data) continue
+    if (!chunk?.data) continue
     // write to any target with chunk.data and chunk.offset (since not always in sequence)
+    chunk.close() // for memory efficiency
 }
 ```
 

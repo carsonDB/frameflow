@@ -5,15 +5,14 @@ import mime from 'mime'
 import { v4 as uuid } from 'uuid'
 
 import { applyMulitpleFilter, applySingleFilter, Filter, FilterArgs } from "./filters"
-import { LoadArgs, loadWorker } from './loader'
-import { FFWorker } from "./message"
-import { Chunk, Exporter, FileReader, getSourceInfo, newExporter, sourceToStreamCreator, StreamReader } from "./streamIO"
-import { AudioStreamMetadata, BufferData, SourceNode, SourceType, StreamMetadata, StreamRef, TargetNode, VideoStreamMetadata } from "./types/graph"
-import { Flags } from './types/flags'
-import { isNode } from './utils'
-import { webFrameToStreamMetadata } from './metadata'
 import { globalFlags } from './globals'
 import { getStaticHLSMetadata } from './hls'
+import { LoadArgs, loadWorker } from './loader'
+import { FFWorker } from "./message"
+import { webFrameToStreamMetadata } from './metadata'
+import { Chunk, Exporter, FileReader, getSourceInfo, newExporter, sourceToStreamCreator, StreamReader } from "./streamIO"
+import { Flags } from './types/flags'
+import { AudioStreamMetadata, BufferData, SourceNode, SourceType, StreamMetadata, StreamRef, TargetNode, VideoStreamMetadata } from "./types/graph"
 
 
 interface SourceArgs {
@@ -129,7 +128,7 @@ export class TrackGroup {
             const chunks: { data: BufferData, offset: number }[] = []
             let length = 0
             for await (const chunk of target) {
-                if (!chunk.data) continue
+                if (!chunk?.data) continue
                 length = Math.max(length, chunk.offset + chunk.data.byteLength)
                 chunks.push({ data: chunk.data, offset: chunk.offset })
             }
@@ -138,18 +137,6 @@ export class TrackGroup {
             chunks.forEach(c => videoData.set(c.data, c.offset))
             if (dest == ArrayBuffer) return videoData
             return new Blob([videoData], { type: mime.getType(target.format) ?? '' })
-        }
-        else if (typeof dest == 'string') {
-            const url = dest
-            if (!isNode) throw `not implemented yet`
-            const target = await this.export({ ...args, url })
-            const { createWriteStream } = require('fs')
-            const writer = createWriteStream(url) as NodeJS.WriteStream
-            for await (const { data, offset } of target) {
-                if (!data) continue
-                writer.write(data,) // todo...
-            }
-            writer.end()
         }
         else throw `not support export destination: "${dest}"`
     }
@@ -286,13 +273,13 @@ export class Target {
     [Symbol.asyncIterator]() {
         const target = this
         return {
-            async next(): Promise<{ value: Chunk, done: boolean }> {
+            async next(): Promise<{ value: Chunk | undefined, done: boolean }> {
                 const output = await target.next()
-                return { value: output ?? new Chunk(new Uint8Array()), done: !output }
+                return { value: output, done: !output }
             },
-            async return(): Promise<{ value: Chunk, done: boolean }> {
+            async return(): Promise<{ value: Chunk | undefined, done: boolean }> {
                 await target.close()
-                return { value: new Chunk(new Uint8Array()), done: true }
+                return { value: undefined, done: true }
             }
         }
     }
