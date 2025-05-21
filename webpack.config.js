@@ -27,6 +27,12 @@ const basicConfig = {
         fallback: { events: false, fs: false, module: false, url: false, crypto: false, path: false, worker_threads: false }
     },
 
+    plugins: [
+        new webpack.DefinePlugin({
+            __DEV__: JSON.stringify(process.env.NODE_ENV !== 'production')
+        })
+    ],
+
     output: {
         filename: 'frameflow.min.js',
         library: {
@@ -48,9 +54,6 @@ const devConfig = {
             title: 'FrameFlow dev',
             template: 'examples/browser/index.html',
         }),
-        new webpack.DefinePlugin({
-            __DEV__: JSON.stringify(process.env.NODE_ENV !== 'production')
-        })
     ],
     devServer: {
         static: path.join(__dirname, "examples"),
