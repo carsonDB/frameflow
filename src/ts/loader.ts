@@ -15,7 +15,7 @@ export const createWorker = () => new Worker()
 
 const wasmFileName = `ffmpeg_built.wasm`
 // production wasm from remote CDN
-let DefaultURL = `https://unpkg.com/frameflow@${pkgJSON.version}/dist/${wasmFileName}`
+let DefaultURL = `https://cdn.jsdelivr.net/npm/frameflow@${pkgJSON.version}/dist/${wasmFileName}`
 
 // this if branch will be removed after built
 if (process.env.NODE_ENV !== 'production') {
